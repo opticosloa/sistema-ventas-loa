@@ -75,7 +75,6 @@ export const checkAuthToken = () => {
 
         } catch (error) {
             dispatch(logout({}));
-            console.log(error);
         }
 
     }

@@ -7,6 +7,7 @@ export * from './Footer';
 export * from './Home';
 export * from './ListaEmpleados';
 export * from './Logo';
+export * from './LogoPantallaCarga';
 export * from './Navbar';
 export * from './SideBar';
 export * from './TicketList';

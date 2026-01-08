@@ -1,7 +1,8 @@
 import axios from 'axios';
+import { getEnvironments } from '../helpers';
 
 const LOAApi = axios.create({
-    baseURL: import.meta.env.VITE_API_URL || 'http://localhost:4000',
+    baseURL: getEnvironments().VITE_API_URL,
     headers: {
         'Content-Type': 'application/json',
         'ngrok-skip-browser-warning': 'true' // Esto salta la página de aviso de ngrok automáticamente
