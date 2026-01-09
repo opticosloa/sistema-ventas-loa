@@ -6,7 +6,8 @@ import { QRScanner } from './QRScanner';
 interface Product {
     id: string | number;
     nombre: string;
-    // Add other fields as needed
+    descripcion?: string;
+    precio_venta?: number | string;
 }
 
 interface ProductSearchProps {

@@ -28,7 +28,10 @@ export type FormValues = {
   lejos_DNP: string;
   lejos_Tipo: string;
   lejos_Color: string;
-  lejos_Armazon: string;
+  // lejos_Armazon: string; // Deprecated by unified armazon
+
+  // Unified frame field
+  armazon: string;
 
   // Cerca (OD / OI)
   cerca_OD_Esf: string;
@@ -42,7 +45,7 @@ export type FormValues = {
   cerca_DNP: string;
   cerca_Tipo: string;
   cerca_Color: string;
-  cerca_Armazon: string;
+  // cerca_Armazon: string; // Deprecated
 
   // Multifocal / DI / Altura / Observaciones
   multifocalTipo: string;

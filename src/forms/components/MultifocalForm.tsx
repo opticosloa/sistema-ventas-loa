@@ -13,7 +13,7 @@ export const MultifocalForm: React.FC<MultifocalFormProps> = ({
     const { multifocalTipo, DI_Lejos, DI_Cerca, Altura, Observacion } = formState;
 
     return (
-        <section className="bg-opacity-10 border border-blanco rounded-xl p-4">
+        <section className="bg-opacity-10 border border-blanco rounded-xl p-4 mt-4">
             <h3 className="text-blanco font-medium mb-3">Multifocal / D.I / Altura</h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

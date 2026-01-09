@@ -19,4 +19,6 @@ export interface Payment {
 export interface PagoParcial {
     metodo: MetodoPago | string;
     monto: number;
+    confirmed?: boolean;
+    readonly?: boolean;
 }

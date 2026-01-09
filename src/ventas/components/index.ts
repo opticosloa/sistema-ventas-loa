@@ -14,3 +14,4 @@ export * from './TicketList';
 export * from './TicketModal';
 export * from './TicketsHistorial';
 export * from './UserWidget';
+export * from './HistorialPrescripciones';

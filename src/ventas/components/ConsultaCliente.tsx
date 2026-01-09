@@ -1,42 +1,62 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useDebounce } from '../../hooks/useDebounce';
 import type { Cliente } from '../../types/Cliente';
 import LOAApi from '../../api/LOAApi';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { RefreshButton } from '../../components/ui/RefreshButton';
 
 const ITEMS_PER_PAGE = 25;
-
-
 
 const formatCurrency = (n?: number) =>
   n === undefined ? "-" : new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(n);
 
 export const ConsultaCliente: React.FC = () => {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [query, setQuery] = useState("");
   const q = useDebounce(query, 300);
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Cliente | null>(null);
   const [showModal, setShowModal] = useState(false);
 
-  const { data: clientes = [], isSuccess } = useQuery({
+  // Edit State
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editData, setEditData] = useState<Partial<Cliente>>({});
+
+  // Consulta de clientes
+  const { data: clientes = [], isLoading, isSuccess } = useQuery({
     queryKey: ['clients'],
     queryFn: async () => {
-      const { data } = await LOAApi.get<{ success: boolean; result: Cliente[] }>('/api/clients');
-      return data.success && Array.isArray(data.result) ? data.result : [];
+      const { data } = await LOAApi.get<{ success: boolean; result: any }>('/api/clients');
+      const listaClientes = data.result?.rows || data.result;
+      return Array.isArray(listaClientes) ? listaClientes : [];
     }
+  });
+
+  // Consulta de prescripciones del cliente seleccionado
+  const { data: prescripciones = [], isLoading: isLoadingPrescripciones } = useQuery({
+    queryKey: ['prescriptions', selected?.cliente_id],
+    queryFn: async () => {
+      if (!selected?.cliente_id) return [];
+      const { data } = await LOAApi.get<{ success: boolean; result: any }>(`/api/prescriptions/client/${selected.cliente_id}`);
+      const lista = data.result?.rows || data.result;
+      return Array.isArray(lista) ? lista : [];
+    },
+    enabled: !!selected?.cliente_id, // Solo ejecuta si hay un cliente seleccionado
   });
 
   useEffect(() => {
     if (isSuccess && clientes.length === 0) {
-      alert("No se encontraron clientes (la tabla está vacía).");
+      // alert("No se encontraron clientes (la tabla está vacía).");
     }
   }, [isSuccess, clientes]);
 
   // Filtrado cliente (nombre, dni, teléfono, email)
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
-    if (!term) return clientes.slice();
-    return clientes.filter((c) =>
+    if (!term) return clientes;
+    return clientes.filter((c: Cliente) =>
       c.nombre.toLowerCase().includes(term) ||
       (c.dni && c.dni.toString().includes(term)) ||
       (c.telefono ?? "").toLowerCase().includes(term) ||
@@ -52,16 +72,21 @@ export const ConsultaCliente: React.FC = () => {
 
   // Abrir modal y bloquear scroll; focus en close button
   useEffect(() => {
-    if (showModal) {
+    if (showModal || showEditModal) {
       document.body.style.overflow = "hidden";
-      const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setShowModal(false); };
+      const onKey = (e: KeyboardEvent) => {
+        if (e.key === "Escape") {
+          if (showEditModal) setShowEditModal(false);
+          else closeModal();
+        }
+      };
       window.addEventListener("keydown", onKey);
       return () => {
         window.removeEventListener("keydown", onKey);
         document.body.style.overflow = "";
       };
     }
-  }, [showModal]);
+  }, [showModal, showEditModal]);
 
   const openModal = (c: Cliente) => {
     setSelected(c);
@@ -73,10 +98,41 @@ export const ConsultaCliente: React.FC = () => {
     setSelected(null);
   };
 
+  const handleEditClick = () => {
+    if (!selected) return;
+    setEditData({ ...selected });
+    setShowEditModal(true);
+  }
+
+  const handleUpdateClient = async () => {
+    if (!editData.cliente_id || !editData.nombre || !editData.dni) {
+      alert("Nombre y DNI son obligatorios");
+      return;
+    }
+
+    if (!editData.dni.toString().match(/^\d+$/)) {
+      alert("El DNI debe contener solo números");
+      return;
+    }
+
+    try {
+      await LOAApi.put(`/api/clients/${editData.cliente_id}`, editData);
+      alert("Cliente actualizado correctamente");
+
+      // Actualizar estado local y cache
+      setSelected(prev => ({ ...prev!, ...editData }));
+      queryClient.invalidateQueries({ queryKey: ['clients'] });
+      setShowEditModal(false);
+    } catch (error) {
+      console.error(error);
+      alert("Error al actualizar cliente");
+    }
+  }
+
   // CSV export
   const exportCSV = () => {
     const headers = ["ID", "Nombre", "DNI", "Teléfono", "Email", "Cuenta"];
-    const rows = filtered.map((c) => [
+    const rows = filtered.map((c: Cliente) => [
       c.cliente_id, c.nombre, c.dni, c.telefono ?? "", c.email ?? "", c.cuenta_corriente ?? 0
     ]);
     const csv = [headers, ...rows].map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
@@ -97,12 +153,23 @@ export const ConsultaCliente: React.FC = () => {
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-6xl mx-auto p-4">
+    <div className="max-w-7xl mx-auto p-4">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <div>
-          <h2 className="text-2xl font-semibold text-white">Consulta de Clientes</h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-2xl font-semibold text-white">Consulta de Clientes</h2>
+            <RefreshButton queryKey="clients" isFetching={isLoading} />
+          </div>
           <p className="text-sm text-crema/80">Buscar y revisar detalles del cliente</p>
         </div>
 
@@ -134,7 +201,7 @@ export const ConsultaCliente: React.FC = () => {
 
       {/* Mobile: cards */}
       <div className="grid gap-4 md:hidden">
-        {pageItems.map(c => (
+        {pageItems.map((c: Cliente) => (
           <article key={c.cliente_id} role="button" tabIndex={0}
             onKeyDown={(e) => onKeyActivate(e, c)}
             onClick={() => openModal(c)}
@@ -180,12 +247,11 @@ export const ConsultaCliente: React.FC = () => {
           </thead>
 
           <tbody>
-            {pageItems.map(c => (
+            {pageItems.map((c: Cliente) => (
               <tr key={c.cliente_id} className="hover:bg-amber-50 focus-within:bg-amber-50">
                 <td className="px-4 py-3 text-sm truncate max-w-xs">
                   <button onClick={() => openModal(c)} className="text-left w-full text-sm">
                     <div className="font-medium truncate">{c.nombre}</div>
-                    {/* <div className="text-xs text-gray-500">{c.direccion}</div> */}
                   </button>
                 </td>
 
@@ -211,7 +277,7 @@ export const ConsultaCliente: React.FC = () => {
 
                     <div className="ml-auto flex gap-2">
                       <button onClick={() => openModal(c)} className="text-azul underline">Ver</button>
-                      <button onClick={() => console.log("Editar", c.cliente_id)} className="text-celeste">Editar</button>
+                      <button onClick={() => { setSelected(c); handleEditClick(); }} className="text-celeste">Editar</button>
                     </div>
                   </div>
                 </td>
@@ -232,36 +298,133 @@ export const ConsultaCliente: React.FC = () => {
         </div>
       </div>
 
-      {/* Modal detalle */}
+      {/* Modal Detalle */}
       {showModal && selected && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-black/40" onClick={closeModal} />
           <div role="dialog" aria-modal="true" aria-label={`Detalle cliente ${selected.nombre}`}
-            className="relative bg-white rounded-lg shadow-lg w-[95%] max-w-4xl p-6 z-50">
+            className="relative bg-white rounded-lg shadow-lg w-full max-w-4xl p-6 z-50 overflow-y-auto max-h-[90vh]">
             <button aria-label="Cerrar" onClick={closeModal}
-              className="absolute top-3 right-3 text-gray-500 hover:text-black">✕</button>
+              className="absolute top-3 right-3 text-gray-500 hover:text-black hover:bg-gray-100 rounded-full w-8 h-8 flex items-center justify-center transition-colors">✕</button>
 
-            <header className="mb-4">
-              <h3 className="text-xl font-semibold">{selected.nombre}</h3>
-              <div className="text-sm text-gray-600">{selected.dni} • {selected.telefono}</div>
-              <div className="text-xs text-gray-500 mt-1">Dirección: {selected.direccion}</div>
+            <header className="mb-6 border-b pb-4">
+              <h3 className="text-2xl font-bold text-gray-800">{selected.nombre}</h3>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-600 mt-1">
+                <span><span className="font-semibold">DNI:</span> {selected.dni}</span>
+                <span><span className="font-semibold">Tel:</span> {selected.telefono}</span>
+                <span><span className="font-semibold">Email:</span> {selected.email || '-'}</span>
+              </div>
+              <div className="text-sm text-gray-500 mt-1"><span className="font-semibold">Dirección:</span> {selected.direccion || '-'}</div>
             </header>
 
-            <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Resumen / acciones */}
-              <div>
-                <h4 className="font-medium mb-2">Detalles</h4>
-                <div className="border rounded p-3 space-y-2">
-                  <div className="text-sm mt-2"><strong>Cuenta corriente:</strong> {formatCurrency(selected.cuenta_corriente)}</div>
+            <section className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Columna Izquierda: Acciones e Información Financiera */}
+              <div className="space-y-6">
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-100">
+                  <h4 className="font-semibold text-gray-700 mb-2">Estado de Cuenta</h4>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-sm text-gray-500">Saldo actual:</span>
+                    <span className="text-2xl font-bold text-gray-800">{formatCurrency(selected.cuenta_corriente)}</span>
+                  </div>
+                </div>
 
-                  <div className="flex gap-2 mt-3">
-                    <button className="btn-primary" onClick={() => console.log("Nuevo pedido para", selected.cliente_id)}>Nuevo pedido</button>
-                    <button className="btn-secondary" onClick={() => console.log("Editar cliente", selected.cliente_id)}>Editar</button>
-                    <button className="btn-secondary" onClick={() => console.log("Historial", selected.cliente_id)}>Historial</button>
+                <div className="flex flex-col gap-3">
+                  <button
+                    className="btn-primary w-full py-2.5 shadow-sm text-center justify-center"
+                    onClick={() => navigate('/empleado/nueva-venta', { state: { client: selected } })}
+                  >
+                    + Nuevo Pedido
+                  </button>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      className="btn-secondary w-full justify-center"
+                      onClick={handleEditClick}
+                    >
+                      Editar Datos
+                    </button>
+                    <button
+                      className="btn-secondary w-full justify-center"
+                      onClick={() => navigate(`/clientes/${selected.cliente_id}/historial`)}
+                    >
+                      Historial Completo
+                    </button>
                   </div>
                 </div>
               </div>
+
+              {/* Columna Derecha: Historial de Prescripciones */}
+              <div className="border-t lg:border-t-0 lg:border-l lg:pl-8 pt-6 lg:pt-0">
+                <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                  <span>Últimas Prescripciones</span>
+                  {isLoadingPrescripciones && <span className="w-3 h-3 rounded-full border-2 border-blue-500 border-t-transparent animate-spin"></span>}
+                </h4>
+
+                <div className="space-y-3">
+                  {!isLoadingPrescripciones && prescripciones.length === 0 && (
+                    <div className="text-sm text-gray-500 italic py-4 text-center bg-gray-50 rounded">
+                      Sin prescripciones registradas
+                    </div>
+                  )}
+
+                  {prescripciones.slice(0, 5).map((pres: any) => (
+                    <div key={pres.prescripcion_id} className="p-3 border rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow text-sm">
+                      <div className="flex justify-between items-start mb-1">
+                        <span className="font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded text-xs">{new Date(pres.fecha).toLocaleDateString()}</span>
+                        <span className="text-xs text-gray-500 uppercase tracking-wide">Dr. {pres.doctor_apellido || 'S/D'}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 mt-2">
+                        <div>
+                          <div className="text-[10px] uppercase text-gray-400 font-bold">Lejos</div>
+                          <div className="truncate text-xs font-mono bg-gray-50 p-1 rounded font-bold">{pres.lejos || '-'}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] uppercase text-gray-400 font-bold">Cerca</div>
+                          <div className="truncate text-xs font-mono bg-gray-50 p-1 rounded font-bold">{pres.cerca || '-'}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </section>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Editar */}
+      {showEditModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/60" onClick={() => setShowEditModal(false)} />
+          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6 z-[70]">
+            <h3 className="text-lg font-bold mb-4">Editar Cliente</h3>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-semibold text-gray-600">Nombre</label>
+                <input className="input w-full" value={editData.nombre || ''} onChange={e => setEditData({ ...editData, nombre: e.target.value ?? '' })} />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-600">DNI</label>
+                <input className="input w-full" value={editData.dni || ''} onChange={e => setEditData({ ...editData, dni: e.target.value })} type="number" />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-600">Teléfono</label>
+                <input className="input w-full" value={editData.telefono || ''} onChange={e => setEditData({ ...editData, telefono: e.target.value ?? '' })} />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-600">Dirección</label>
+                <input className="input w-full" value={editData.direccion || ''} onChange={e => setEditData({ ...editData, direccion: e.target.value ?? '' })} />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-gray-600">Email</label>
+                <input className="input w-full" value={editData.email || ''} onChange={e => setEditData({ ...editData, email: e.target.value ?? '' })} />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-6">
+              <button className="btn-secondary" onClick={() => setShowEditModal(false)}>Cancelar</button>
+              <button className="btn-primary" onClick={handleUpdateClient}>Guardar Cambios</button>
+            </div>
           </div>
         </div>
       )}

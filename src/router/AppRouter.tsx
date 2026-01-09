@@ -1,6 +1,7 @@
 import { Routes, Route } from 'react-router-dom';
-import { Navbar, ConsultaStock, ConsultaCliente, TicketList, TicketsHistorial, Estadisticas, ListaEmpleados, Home } from '../ventas/components';
-import { LoginPage, NotFoundPage, PagoResultadoPage, UnAuthorized } from '../ventas/page';
+import { Navbar, ConsultaStock, ConsultaCliente, TicketList, TicketsHistorial, Estadisticas, ListaEmpleados, Home, HistorialPrescripciones } from '../ventas/components';
+import { LoginPage, NotFoundPage, PagoResultadoPage, UnAuthorized, DevolucionesPage } from '../ventas/page';
+
 import { HomePage, EmpleadoHomePage, TallerHomePage } from '../page';
 import { AuthGuard, RoleGuard, TenantGuard } from '../auth/guards';
 import { useAuthStore } from '../hooks';
@@ -42,7 +43,9 @@ export const AppRouter = () => {
                 <Route path="stock" element={<ConsultaStock />} />
                 <Route path="clientes" element={<ConsultaCliente />} />
                 <Route path="nueva-venta/pago" element={<FormularioDePago />} />
+                <Route path="clientes/:cliente_id/historial" element={<HistorialPrescripciones />} />
               </Route>
+              <Route path="/ventas/devoluciones" element={<DevolucionesPage />} />
             </Route>
 
 

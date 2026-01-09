@@ -1,12 +1,19 @@
 import React from 'react';
 import type { FormValues } from '../../types/ventasFormTypes';
 
+interface StockInfo {
+    stock: number;
+    ubicacion: string;
+    precio_venta: number;
+}
+
 interface OpticSectionProps {
     title: string;
     prefix: 'lejos' | 'cerca';
     formState: FormValues;
     formErrors: Record<string, string>;
     onInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
+    stockStatus?: { OD: StockInfo | null, OI: StockInfo | null };
 }
 
 const GLASS_TYPES = [
@@ -21,6 +28,7 @@ export const OpticSection: React.FC<OpticSectionProps> = ({
     formState,
     formErrors,
     onInputChange,
+    stockStatus,
 }) => {
     const getKey = (suffix: string) => `${prefix}_${suffix}` as keyof FormValues;
 
@@ -136,6 +144,51 @@ export const OpticSection: React.FC<OpticSectionProps> = ({
                     />
                 )}
 
+            </div>
+
+            {/* Stock Indicators Row */}
+            <div className="grid grid-cols-2 gap-3 mt-2">
+                <div className="text-xs">
+                    // Reemplazar la sección de visualización de stock
+                    {stockStatus?.OD ? (
+                        <div className="bg-green-100 border border-green-300 p-2 rounded text-xs mt-1">
+                            <div className="font-bold text-green-800 flex items-center gap-1">
+                                <span>✅ EN STOCK ({stockStatus.OD.stock})</span>
+                            </div>
+                            <div className="text-blue-800 font-mono text-sm font-bold mt-1">
+                                📍 {stockStatus.OD.ubicacion} {/* ESTO ES LO QUE EL VENDEDOR BUSCA */}
+                            </div>
+                            <div className="text-gray-600 mt-1">
+                                ${stockStatus.OD.precio_venta}
+                            </div>
+                        </div>
+                    ) : (
+                        (formState[getKey('OD_Esf')] && formState[getKey('OD_Cil')]) && (
+                            <div className="bg-yellow-50 border border-yellow-200 p-2 rounded text-xs mt-1 text-yellow-700">
+                                ⚠️ Sin Stock (Laboratorio)
+                            </div>
+                        )
+                    )}
+                </div>
+                <div className="text-xs">
+                    {stockStatus?.OI ? (
+                        <div className="bg-green-100 border border-green-300 p-2 rounded text-xs mt-1">
+                            <div className="font-bold text-green-800 flex items-center gap-1">
+                                <span>✅ EN STOCK ({stockStatus.OI.stock})</span>
+                            </div>
+                            <div className="text-blue-800 font-mono text-sm font-bold mt-1">
+                                📍 {stockStatus.OI.ubicacion} {/* ESTO ES LO QUE EL VENDEDOR BUSCA */}
+                            </div>
+                            <div className="text-gray-600 mt-1">
+                                ${stockStatus.OI.precio_venta}
+                            </div>
+                        </div>
+                    ) : (
+                        (formState[getKey('OI_Esf')] && formState[getKey('OI_Cil')]) && (
+                            <span className="text-yellow-500">⚠️ Sin Stock - Pedir a fábrica</span>
+                        )
+                    )}
+                </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">

@@ -6,3 +6,4 @@ export * from './RegisterPage';
 export * from './ResultLayout';
 export * from './UnAuthorized';
 export * from './VentaDetallePage';
+export * from './DevolucionesPage';
