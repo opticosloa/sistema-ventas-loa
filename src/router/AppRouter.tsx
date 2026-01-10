@@ -5,7 +5,7 @@ import { LoginPage, NotFoundPage, PagoResultadoPage, UnAuthorized, DevolucionesP
 import { HomePage, EmpleadoHomePage, TallerHomePage } from '../page';
 import { AuthGuard, RoleGuard, TenantGuard } from '../auth/guards';
 import { useAuthStore } from '../hooks';
-import { FormularioDePago, FormularioVenta } from '../forms';
+import { FormularioDePago, FormularioVenta, FormularioProducto, FormularioCristal } from '../forms';
 
 export const AppRouter = () => {
 
@@ -33,6 +33,12 @@ export const AppRouter = () => {
                 <Route path="estado-taller" element={<TicketList />} />
                 <Route path="empleados" element={<ListaEmpleados />} />
                 <Route path="taller" element={<TicketList />} />
+                <Route path="devoluciones" element={<DevolucionesPage />} />
+
+                <Route element={<RoleGuard allowedRoles={['SUPERADMIN']} />}>
+                  <Route path="productos/nuevo" element={<FormularioProducto />} />
+                  <Route path="cristales/nuevo" element={<FormularioCristal />} />
+                </Route>
               </Route>
             </Route>
 
@@ -44,8 +50,8 @@ export const AppRouter = () => {
                 <Route path="clientes" element={<ConsultaCliente />} />
                 <Route path="nueva-venta/pago" element={<FormularioDePago />} />
                 <Route path="clientes/:cliente_id/historial" element={<HistorialPrescripciones />} />
+                <Route path="devoluciones" element={<DevolucionesPage />} />
               </Route>
-              <Route path="/ventas/devoluciones" element={<DevolucionesPage />} />
             </Route>
 
 

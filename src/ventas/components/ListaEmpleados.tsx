@@ -25,7 +25,13 @@ export const ListaEmpleados: React.FC = () => {
 
   const createUserMutation = useMutation({
     mutationFn: async (newEmp: Empleado) => {
-      return await LOAApi.post('/api/users', newEmp);
+      // Map 'password' from form to 'password_hash' for backend
+      const payload = {
+        ...newEmp,
+        password_hash: newEmp.password,
+        sucursal_id: 1 // Default sucursal
+      };
+      return await LOAApi.post('/api/users', payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
@@ -41,6 +47,8 @@ export const ListaEmpleados: React.FC = () => {
         direccion: '',
         fecha_nacimiento: '',
         cuenta_corriente: 0,
+        email: '',
+        password: ''
       });
     },
     onError: (error) => {
@@ -72,6 +80,8 @@ export const ListaEmpleados: React.FC = () => {
     direccion: '',
     fecha_nacimiento: '',
     cuenta_corriente: 0,
+    email: '',
+    password: ''
   });
 
   // Filtrado de empleados (nombre, apellido, cuit, telefono)
@@ -120,12 +130,12 @@ export const ListaEmpleados: React.FC = () => {
 
   const addEmpleado = () => {
     if (
-      newEmpleado.nombre &&
-      newEmpleado.apellido &&
       newEmpleado.cuit &&
       newEmpleado.rol &&
       newEmpleado.telefono &&
-      newEmpleado.fecha_nacimiento
+      newEmpleado.fecha_nacimiento &&
+      newEmpleado.email &&
+      newEmpleado.password
     ) {
       createUserMutation.mutate(newEmpleado);
     } else {
@@ -386,6 +396,32 @@ export const ListaEmpleados: React.FC = () => {
                   name="rol"
                   placeholder="Rol"
                   value={newEmpleado.rol}
+                  onChange={handleInputChange}
+                  className="input"
+                  required
+                />
+              </label>
+
+              <label className="flex flex-col gap-1">
+                <span className="text-sm text-black">Email <span className='text-red-600'>*</span></span>
+                <input
+                  type="email"
+                  name="email"
+                  placeholder="correo@ejemplo.com"
+                  value={newEmpleado.email || ''}
+                  onChange={handleInputChange}
+                  className="input"
+                  required
+                />
+              </label>
+
+              <label className="flex flex-col gap-1">
+                <span className="text-sm text-black">Contraseña <span className='text-red-600'>*</span></span>
+                <input
+                  type="password"
+                  name="password"
+                  placeholder="******"
+                  value={newEmpleado.password || ''}
                   onChange={handleInputChange}
                   className="input"
                   required

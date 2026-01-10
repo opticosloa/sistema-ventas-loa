@@ -70,6 +70,24 @@ export const FormularioVenta: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [cliente, setCliente] = useState<Cliente | null>(null);
 
+  // Crystal Data
+  const [availableCrystals, setAvailableCrystals] = useState<any[]>([]);
+
+  useEffect(() => {
+    // Fetch Crystals on mount with type filter
+    const fetchCrystals = async () => {
+      try {
+        const { data } = await LOAApi.get('/api/products', { params: { tipo: 'CRISTAL' } });
+        // Backend returns { success: true, result: [...] }
+        const crystals = Array.isArray(data.result) ? data.result : [];
+        setAvailableCrystals(crystals);
+      } catch (error) {
+        console.error("Error fetching crystals:", error);
+      }
+    };
+    fetchCrystals();
+  }, []);
+
   // Tabs: 'optica' | 'retail'
   const [activeTab, setActiveTab] = useState<'optica' | 'retail'>('optica');
 
@@ -77,8 +95,6 @@ export const FormularioVenta: React.FC = () => {
 
   // Price State
   const [armazonPrecio, setArmazonPrecio] = useState(0);
-
-  // Debajo de const [armazonPrecio, setArmazonPrecio] = useState(0);
   const [cristalesPrecio, setCristalesPrecio] = useState(0);
 
   // Discount State
@@ -132,6 +148,7 @@ export const FormularioVenta: React.FC = () => {
     Observacion,
   } = formState as FormValues;
 
+  // --- CORRECCIÓN 1: Array de dependencias cerrado correctamente ---
   useEffect(() => {
     // OD Calculation
     if (lejos_OD_Add && lejos_OD_Esf) {
@@ -159,6 +176,19 @@ export const FormularioVenta: React.FC = () => {
     lejos_OI_Esf, lejos_OI_Add, lejos_OI_Cil, lejos_OI_Eje
   ]);
 
+  // SYNC TYPE LEJOS/CERCA
+  useEffect(() => {
+    if (formState.lejos_Tipo && formState.lejos_Tipo !== formState.cerca_Tipo) {
+      setFieldValue('cerca_Tipo', formState.lejos_Tipo);
+    }
+  }, [formState.lejos_Tipo]);
+
+  useEffect(() => {
+    if (formState.cerca_Tipo && formState.cerca_Tipo !== formState.lejos_Tipo) {
+      setFieldValue('lejos_Tipo', formState.cerca_Tipo);
+    }
+  }, [formState.cerca_Tipo]);
+
   // Crystal Stock State
   const [stockStatus, setStockStatus] = useState<{
     lejos: { OD: any, OI: any },
@@ -171,19 +201,18 @@ export const FormularioVenta: React.FC = () => {
   const checkCrystalStock = async (prefix: 'lejos' | 'cerca', ojo: 'OD' | 'OI') => {
     const esf = formState[`${prefix}_${ojo}_Esf` as keyof FormValues];
     const cil = formState[`${prefix}_${ojo}_Cil` as keyof FormValues];
-    const tipo = formState[`${prefix}_Tipo` as keyof FormValues]; // Mapping to Material?
-    const color = formState[`${prefix}_Color` as keyof FormValues]; // Mapping to Tratamiento?
+    const tipo = formState[`${prefix}_Tipo` as keyof FormValues];
+    const color = formState[`${prefix}_Color` as keyof FormValues];
 
     if (!esf || !cil || !tipo) return;
 
     try {
-      // Mapping assumption: Tipo -> Material, Color -> Tratamiento (or default)
       const { data } = await LOAApi.get(`/api/crystals/check-stock`, {
         params: {
           esfera: esf,
           cilindro: cil,
           material: tipo,
-          tratamiento: color || 'Blanco' // Default if empty?
+          tratamiento: color || 'Blanco'
         }
       });
 
@@ -200,9 +229,7 @@ export const FormularioVenta: React.FC = () => {
     }
   };
 
-  // Auto-calculate Crystal Price when stockStatus changes
-  // En FormularioVenta.tsx
-
+  // --- CORRECCIÓN 2: Lógica de Precio Unificada y bien cerrada ---
   useEffect(() => {
     let totalCalculado = 0;
     let foundStock = false;
@@ -214,56 +241,69 @@ export const FormularioVenta: React.FC = () => {
       }
     };
 
+    // Sumar stock encontrado
     addFn(stockStatus.lejos.OD);
     addFn(stockStatus.lejos.OI);
     addFn(stockStatus.cerca.OD);
     addFn(stockStatus.cerca.OI);
 
-    // LÓGICA MEJORADA:
     if (foundStock) {
-      // Si encontró al menos uno en stock, sugerimos el precio
+      // Si hay stock, usamos ese precio
       setCristalesPrecio(totalCalculado);
     } else {
-      // Si NO hay nada en stock (es todo laboratorio), NO tocamos el precio 
-      // si el usuario ya escribió algo manualmente.
-      // Solo lo reseteamos si es 0 y no hay input del usuario.
-      if (cristalesPrecio === 0 && totalCalculado === 0) {
-        // Opcional: Podrías poner un precio base de laboratorio aquí si quisieras
+      // Si NO hay stock, calculamos precio de laboratorio basado en el Tipo (usando availableCrystals)
+      let labPrice = 0;
+
+      const getPrice = (name: string) => {
+        const c = availableCrystals.find(x => x.nombre === name);
+        return c ? Number(c.precio_venta) : 0;
+      };
+
+      // Lejos (Par) - Multiplicamos x2 porque precio unitario
+      if (formState.lejos_Tipo) {
+        labPrice += getPrice(formState.lejos_Tipo) * 2;
       }
+
+      // Cerca (Par) - Multiplicamos x2
+      if (formState.cerca_Tipo) {
+        labPrice += getPrice(formState.cerca_Tipo) * 2;
+      }
+
+      // Multifocal (Unidad/Par según criterio) - Asumimos precio par en DB o unitario*2? 
+      // USER PROMPT: "Suma este precio al total". 
+      // User anterior dijo "multiplicar por 2 Lejos y Cerca". Multifocal suele ser por par en lista, pero si es unitario, x2.
+      // Vamos a asumir par x1 si es multifocal, o x2 si es lente de contacto. 
+      // Por consistencia con Lejos/Cerca, si es "Lente", es x2. Pero Multifocal suele venderse el par.
+      // Dejamos x1 por defecto o x2 si el user no especificó.
+      // REVISIT: Previous prompt said "multiplicar por 2 Lejos y Cerca".
+      if (formState.multifocalTipo) {
+        labPrice += getPrice(formState.multifocalTipo);
+      }
+
+      setCristalesPrecio(labPrice);
     }
-  }, [stockStatus]); // Quitamos cristalesPrecio de dependencias para evitar loop infinito
+  }, [stockStatus, formState.lejos_Tipo, formState.cerca_Tipo, formState.multifocalTipo, availableCrystals]);
+
 
   // Effect to trigger checks
   useEffect(() => {
-    // Lejos OD
     checkCrystalStock('lejos', 'OD');
   }, [formState.lejos_OD_Esf, formState.lejos_OD_Cil, formState.lejos_Tipo, formState.lejos_Color]);
 
   useEffect(() => {
-    // Lejos OI
     checkCrystalStock('lejos', 'OI');
   }, [formState.lejos_OI_Esf, formState.lejos_OI_Cil, formState.lejos_Tipo, formState.lejos_Color]);
 
   useEffect(() => {
-    // Cerca OD
     checkCrystalStock('cerca', 'OD');
   }, [formState.cerca_OD_Esf, formState.cerca_OD_Cil, formState.cerca_Tipo, formState.cerca_Color]);
 
   useEffect(() => {
-    // Cerca OI
     checkCrystalStock('cerca', 'OI');
   }, [formState.cerca_OI_Esf, formState.cerca_OI_Cil, formState.cerca_Tipo, formState.cerca_Color]);
 
 
-  // ... (render logic update to pass stockStatus to OpticSection)
-
-  // In Render:
-  // <OpticSection ... stockStatus={stockStatus.lejos} /> 
-
-  // Wait, I need to update OpticSection props first to accept stockStatus.
-
-
-
+  // PREPARAR DATOS PARA ENVIO
   const lejos = {
     OD: {
       esfera: formState.lejos_OD_Esf || null,
@@ -434,18 +474,6 @@ export const FormularioVenta: React.FC = () => {
   };
 
   const processSale = async (isBudget: boolean = false) => {
-    // 1. Determine Sale Type Context
-    // If we are strictly in 'Retail' tab AND no prescription data entered, we skip prescription validation/creation?
-    // But user said "A la misma transacción". Usually mixed. 
-    // If 'Optica' tab has data, we create prescription. If not, only direct sale?
-    // Logic: If user filled optical fields or is on Optica tab, validate.
-    // Simplify: If validation passes, create prescription. If not (and manual), check if just retail?
-
-    // Let's assume: If on 'Optica', we validate prescription. If on 'Retail', we check if cart has items. 
-    // But we can have both.
-    // Let's validate prescription only if "some" optical data provided.
-    // Or cleaner: Always try to validate. If empty, maybe skip if cart > 0?
-
     let createPrescription = false;
 
     // Check if meaningful optical data exists
@@ -507,7 +535,7 @@ export const FormularioVenta: React.FC = () => {
 
         const payload = {
           cliente_id: finalClienteId,
-          cliente: undefined, // client assumed created/resolved
+          cliente: undefined,
           obraSocial: clienteObraSocial || null,
           doctor_id: null,
           matricula: doctorMatricula,
@@ -571,7 +599,7 @@ export const FormularioVenta: React.FC = () => {
 
   const onBudget = async () => {
     processSale(true);
-  }
+  };
 
   return (
     <div className="w-full max-w-5xl mx-auto p-4 sm:p-6 fade-in">
@@ -635,6 +663,7 @@ export const FormularioVenta: React.FC = () => {
             formErrors={formErrors}
             onInputChange={onInputChange}
             stockStatus={stockStatus.lejos}
+            availableCrystals={availableCrystals}
           />
 
           <OpticSection
@@ -644,6 +673,7 @@ export const FormularioVenta: React.FC = () => {
             formErrors={formErrors}
             onInputChange={onInputChange}
             stockStatus={stockStatus.cerca}
+            availableCrystals={availableCrystals}
           />
 
           <FrameSection
@@ -731,12 +761,6 @@ export const FormularioVenta: React.FC = () => {
         <div className={activeTab === 'retail' ? 'block' : 'hidden'}>
           <SalesItemsList items={cart} onItemsChange={setCart} />
         </div>
-
-        {/* Also allow Cart visibility if mixed? User might want to see items while in Opitca.
-            For now, assume user switches tabs. 
-            Or we can show a mini-summary of cart always?
-            Let's keep it simple with tabs.
-        */}
 
         {/* ACTIONS */}
         <hr className="border-gray-700 my-4" />

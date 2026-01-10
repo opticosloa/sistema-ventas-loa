@@ -92,8 +92,10 @@ export const DevolucionesPage: React.FC = () => {
         }
     };
 
-    const processReturn = async () => {
-        if (!window.confirm("¿Confirmar devolución? Esto anulará los items y generará el movimiento de stock.")) return;
+    const processReturn = async (bypassConfirm = false) => {
+        if (!bypassConfirm) {
+            if (!window.confirm("¿Confirmar devolución? Esto anulará los items y generará el movimiento de stock.")) return;
+        }
 
         setLoading(true);
         try {
@@ -129,7 +131,7 @@ export const DevolucionesPage: React.FC = () => {
 
         // Check if user is Admin/SuperAdmin
         if (role === 'ADMIN' || role === 'SUPERADMIN') {
-            processReturn();
+            processReturn(false);
         } else {
             setIsSupervisorModalOpen(true);
         }
@@ -224,9 +226,8 @@ export const DevolucionesPage: React.FC = () => {
                 isOpen={isSupervisorModalOpen}
                 onClose={() => setIsSupervisorModalOpen(false)}
                 onSuccess={(name) => {
-                    // Logic to proceed after auth
-                    // We can also add a toast or alert saying "Authorized by {name}" if needed
-                    processReturn();
+                    name;
+                    processReturn(true);
                 }}
                 actionName="Autorizar Devolución"
             />

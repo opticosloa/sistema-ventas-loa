@@ -5,7 +5,7 @@ import { useAppSelector } from '../../hooks';
 export const Dashboard = () => {
   const navigate = useNavigate();
 
-  const { nombre } = useAppSelector((state) => state.auth);
+  const { nombre, role } = useAppSelector((state) => state.auth);
 
   return (
     <main className="w-screen h-scw-screen mx-auto bg-gradient-to-r from-azul to-celeste">
@@ -55,6 +55,30 @@ export const Dashboard = () => {
           >
             Stock
           </button>
+
+          <button
+            className="bg-gray-100 border border-gray-300 shadow-sm rounded-lg h-28 flex items-center justify-center text-lg font-medium hover:bg-crema hover:opacity-90 transition"
+            onClick={() => navigate("/admin/devoluciones")}
+          >
+            Devoluciones
+          </button>
+
+          {role === 'SUPERADMIN' && (
+            <>
+              <button
+                className="bg-gray-100 border-2 border-purple-300 shadow-sm rounded-lg h-28 flex items-center justify-center text-lg font-medium hover:bg-purple-100/50 hover:opacity-90 transition"
+                onClick={() => navigate("/admin/productos/nuevo")}
+              >
+                📦 Alta Producto
+              </button>
+              <button
+                className="bg-gray-100 border-2 border-purple-300 shadow-sm rounded-lg h-28 flex items-center justify-center text-lg font-medium hover:bg-purple-100/50 hover:opacity-90 transition"
+                onClick={() => navigate("/admin/cristales/nuevo")}
+              >
+                👁️ Alta Cristal
+              </button>
+            </>
+          )}
         </div>
 
         <div className="mt-8">

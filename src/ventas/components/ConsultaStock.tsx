@@ -111,7 +111,8 @@ export const ConsultaStock: React.FC = () => {
 
 
   const handleOpenQr = (p: Producto) => {
-    setQrModal({ open: true, value: p.qr_code || p.producto_id?.toString() || '', title: p.nombre });
+    const qrValue = p.producto_id?.toString()
+    setQrModal({ open: true, value: qrValue, title: p.nombre });
   };
 
   const handleCopyQr = () => {

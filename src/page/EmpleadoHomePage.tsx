@@ -38,6 +38,13 @@ export const EmpleadoHomePage = () => {
           >
             Clientes
           </button>
+
+          <button
+            className="bg-gray-100 border border-gray-300 shadow-sm rounded-lg h-28 flex items-center justify-center text-lg font-medium hover:bg-gray-200 transition"
+            onClick={() => navigate("/empleado/devoluciones")}
+          >
+            Devoluciones
+          </button>
         </div>
 
         <div className="mt-8">

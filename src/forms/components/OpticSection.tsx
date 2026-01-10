@@ -1,26 +1,15 @@
 import React from 'react';
 import type { FormValues } from '../../types/ventasFormTypes';
 
-interface StockInfo {
-    stock: number;
-    ubicacion: string;
-    precio_venta: number;
-}
-
 interface OpticSectionProps {
     title: string;
     prefix: 'lejos' | 'cerca';
     formState: FormValues;
-    formErrors: Record<string, string>;
+    formErrors: Record<string, string>; // Ahora sí la vamos a usar
     onInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
-    stockStatus?: { OD: StockInfo | null, OI: StockInfo | null };
+    stockStatus: { OD: any; OI: any };
+    availableCrystals: any[];
 }
-
-const GLASS_TYPES = [
-    "Fotocromático",
-    "Orgánico Blanco",
-    "Filtro Azul Antireflex",
-];
 
 export const OpticSection: React.FC<OpticSectionProps> = ({
     title,
@@ -29,199 +18,181 @@ export const OpticSection: React.FC<OpticSectionProps> = ({
     formErrors,
     onInputChange,
     stockStatus,
+    availableCrystals = []
 }) => {
-    const getKey = (suffix: string) => `${prefix}_${suffix}` as keyof FormValues;
 
-    const handleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        onInputChange(e);
+    // Helper para obtener valores del state
+    const getVal = (field: string) => formState[`${prefix}_${field}` as keyof FormValues];
 
-        // Auto-set Color to "Maxima" if "Filtro Azul Antireflex" is selected
-        if (e.target.value === "Filtro Azul Antireflex") {
-            const colorEvent = {
-                target: {
-                    name: getKey('Color'),
-                    value: "Maxima"
-                }
-            } as React.ChangeEvent<HTMLInputElement>;
-            onInputChange(colorEvent);
-        }
+    // Helper para obtener clases CSS (USA formErrors AQUÍ)
+    // Si existe un error en 'lejos_OD_Esf', devuelve la clase con borde rojo
+    const getInputClass = (field: string, centerText: boolean = false) => {
+        const fieldName = `${prefix}_${field}`;
+        const hasError = !!formErrors[fieldName];
+        const baseClass = "input w-full";
+        const alignClass = centerText ? "text-center" : "";
+        const errorClass = hasError ? "border-red-500 focus:ring-red-500 text-red-400" : "";
+
+        return `${baseClass} ${alignClass} ${errorClass}`.trim();
     };
 
+    // Determina si hay stock visualmente
+    const hasStockOD = !!stockStatus.OD;
+    const hasStockOI = !!stockStatus.OI;
+
     return (
-        <section className="bg-opacity-10 border border-blanco rounded-xl p-4">
-            <h3 className="text-blanco font-medium mb-3">{title}</h3>
+        <div className="bg-gray-800 p-4 rounded-xl border border-gray-600 mb-4">
+            <h3 className="text-xl text-celeste font-semibold mb-3 border-b border-gray-600 pb-2">
+                {title} {hasStockOD && hasStockOI && <span className="text-xs text-green-400 ml-2">✓ Stock Disponible</span>}
+            </h3>
 
-            <div className={`grid grid-cols-2 gap-3 ${prefix === 'lejos' ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
-                <div>
-                    <input
-                        name={getKey('OD_Esf')}
-                        value={formState[getKey('OD_Esf')] as string}
-                        placeholder="OD Esfera"
-                        className={`input ${formErrors[getKey('OD_Esf')] ? 'border-red-500' : ''}`}
-                        onChange={onInputChange}
-                    />
-                    {formErrors[getKey('OD_Esf')] && (
-                        <span className="text-red-500 text-xs">{formErrors[getKey('OD_Esf')]}</span>
-                    )}
-                </div>
-                <div>
-                    <input
-                        name={getKey('OD_Cil')}
-                        value={formState[getKey('OD_Cil')] as string}
-                        placeholder="OD Cilindro"
-                        className={`input ${formErrors[getKey('OD_Cil')] ? 'border-red-500' : ''}`}
-                        onChange={onInputChange}
-                    />
-                    {formErrors[getKey('OD_Cil')] && (
-                        <span className="text-red-500 text-xs">{formErrors[getKey('OD_Cil')]}</span>
-                    )}
-                </div>
-                <div>
-                    <input
-                        name={getKey('OD_Eje')}
-                        value={formState[getKey('OD_Eje')] as string}
-                        placeholder="OD Eje"
-                        className={`input ${formErrors[getKey('OD_Eje')] ? 'border-red-500' : ''}`}
-                        onChange={onInputChange}
-                    />
-                    {formErrors[getKey('OD_Eje')] && (
-                        <span className="text-red-500 text-xs">{formErrors[getKey('OD_Eje')]}</span>
-                    )}
-                </div>
-                {prefix === 'lejos' && (
-                    <input
-                        name={getKey('OD_Add')}
-                        value={formState[getKey('OD_Add')] as string}
-                        placeholder="OD Adición"
-                        className="input"
-                        onChange={onInputChange}
-                    />
-                )}
-
-                <div>
-                    <input
-                        name={getKey('OI_Esf')}
-                        value={formState[getKey('OI_Esf')] as string}
-                        placeholder="OI Esfera"
-                        className={`input ${formErrors[getKey('OI_Esf')] ? 'border-red-500' : ''}`}
-                        onChange={onInputChange}
-                    />
-                    {formErrors[getKey('OI_Esf')] && (
-                        <span className="text-red-500 text-xs">{formErrors[getKey('OI_Esf')]}</span>
-                    )}
-                </div>
-                <div>
-                    <input
-                        name={getKey('OI_Cil')}
-                        value={formState[getKey('OI_Cil')] as string}
-                        placeholder="OI Cilindro"
-                        className={`input ${formErrors[getKey('OI_Cil')] ? 'border-red-500' : ''}`}
-                        onChange={onInputChange}
-                    />
-                    {formErrors[getKey('OI_Cil')] && (
-                        <span className="text-red-500 text-xs">{formErrors[getKey('OI_Cil')]}</span>
-                    )}
-                </div>
-                <div>
-                    <input
-                        name={getKey('OI_Eje')}
-                        value={formState[getKey('OI_Eje')] as string}
-                        placeholder="OI Eje"
-                        className={`input ${formErrors[getKey('OI_Eje')] ? 'border-red-500' : ''}`}
-                        onChange={onInputChange}
-                    />
-                    {formErrors[getKey('OI_Eje')] && (
-                        <span className="text-red-500 text-xs">{formErrors[getKey('OI_Eje')]}</span>
-                    )}
-                </div>
-                {prefix === 'lejos' && (
-                    <input
-                        name={getKey('OI_Add')}
-                        value={formState[getKey('OI_Add')] as string}
-                        placeholder="OI Adición"
-                        className="input"
-                        onChange={onInputChange}
-                    />
-                )}
-
-            </div>
-
-            {/* Stock Indicators Row */}
-            <div className="grid grid-cols-2 gap-3 mt-2">
-                <div className="text-xs">
-                    // Reemplazar la sección de visualización de stock
-                    {stockStatus?.OD ? (
-                        <div className="bg-green-100 border border-green-300 p-2 rounded text-xs mt-1">
-                            <div className="font-bold text-green-800 flex items-center gap-1">
-                                <span>✅ EN STOCK ({stockStatus.OD.stock})</span>
-                            </div>
-                            <div className="text-blue-800 font-mono text-sm font-bold mt-1">
-                                📍 {stockStatus.OD.ubicacion} {/* ESTO ES LO QUE EL VENDEDOR BUSCA */}
-                            </div>
-                            <div className="text-gray-600 mt-1">
-                                ${stockStatus.OD.precio_venta}
-                            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* OJO DERECHO */}
+                <div className="bg-gray-900 p-3 rounded border border-gray-700">
+                    <h4 className="text-white font-bold mb-2 text-center">Ojo Derecho (OD)</h4>
+                    <div className="grid grid-cols-3 gap-2">
+                        <div>
+                            <label className="text-xs text-gray-400">Esfera</label>
+                            <input
+                                type="number" step="0.25"
+                                name={`${prefix}_OD_Esf`}
+                                value={getVal('OD_Esf') || ''}
+                                onChange={onInputChange}
+                                className={getInputClass('OD_Esf', true)}
+                            />
                         </div>
-                    ) : (
-                        (formState[getKey('OD_Esf')] && formState[getKey('OD_Cil')]) && (
-                            <div className="bg-yellow-50 border border-yellow-200 p-2 rounded text-xs mt-1 text-yellow-700">
-                                ⚠️ Sin Stock (Laboratorio)
-                            </div>
-                        )
-                    )}
-                </div>
-                <div className="text-xs">
-                    {stockStatus?.OI ? (
-                        <div className="bg-green-100 border border-green-300 p-2 rounded text-xs mt-1">
-                            <div className="font-bold text-green-800 flex items-center gap-1">
-                                <span>✅ EN STOCK ({stockStatus.OI.stock})</span>
-                            </div>
-                            <div className="text-blue-800 font-mono text-sm font-bold mt-1">
-                                📍 {stockStatus.OI.ubicacion} {/* ESTO ES LO QUE EL VENDEDOR BUSCA */}
-                            </div>
-                            <div className="text-gray-600 mt-1">
-                                ${stockStatus.OI.precio_venta}
-                            </div>
+                        <div>
+                            <label className="text-xs text-gray-400">Cilindro</label>
+                            <input
+                                type="number" step="0.25"
+                                name={`${prefix}_OD_Cil`}
+                                value={getVal('OD_Cil') || ''}
+                                onChange={onInputChange}
+                                className={getInputClass('OD_Cil', true)}
+                            />
                         </div>
-                    ) : (
-                        (formState[getKey('OI_Esf')] && formState[getKey('OI_Cil')]) && (
-                            <span className="text-yellow-500">⚠️ Sin Stock - Pedir a fábrica</span>
-                        )
+                        <div>
+                            <label className="text-xs text-gray-400">Eje</label>
+                            <input
+                                type="number"
+                                name={`${prefix}_OD_Eje`}
+                                value={getVal('OD_Eje') || ''}
+                                onChange={onInputChange}
+                                className={getInputClass('OD_Eje', true)}
+                            />
+                        </div>
+                    </div>
+                    {/* Campo Add solo para Lejos (opcional según tu lógica de negocio) */}
+                    {prefix === 'lejos' && (
+                        <div className="mt-2">
+                            <label className="text-xs text-gray-400">Add</label>
+                            <input
+                                type="number" step="0.25"
+                                name={`${prefix}_OD_Add`}
+                                value={getVal('OD_Add') || ''}
+                                onChange={onInputChange}
+                                className={getInputClass('OD_Add', true)}
+                            />
+                        </div>
+                    )}
+                </div>
+
+                {/* OJO IZQUIERDO */}
+                <div className="bg-gray-900 p-3 rounded border border-gray-700">
+                    <h4 className="text-white font-bold mb-2 text-center">Ojo Izquierdo (OI)</h4>
+                    <div className="grid grid-cols-3 gap-2">
+                        <div>
+                            <label className="text-xs text-gray-400">Esfera</label>
+                            <input
+                                type="number" step="0.25"
+                                name={`${prefix}_OI_Esf`}
+                                value={getVal('OI_Esf') || ''}
+                                onChange={onInputChange}
+                                className={getInputClass('OI_Esf', true)}
+                            />
+                        </div>
+                        <div>
+                            <label className="text-xs text-gray-400">Cilindro</label>
+                            <input
+                                type="number" step="0.25"
+                                name={`${prefix}_OI_Cil`}
+                                value={getVal('OI_Cil') || ''}
+                                onChange={onInputChange}
+                                className={getInputClass('OI_Cil', true)}
+                            />
+                        </div>
+                        <div>
+                            <label className="text-xs text-gray-400">Eje</label>
+                            <input
+                                type="number"
+                                name={`${prefix}_OI_Eje`}
+                                value={getVal('OI_Eje') || ''}
+                                onChange={onInputChange}
+                                className={getInputClass('OI_Eje', true)}
+                            />
+                        </div>
+                    </div>
+                    {prefix === 'lejos' && (
+                        <div className="mt-2">
+                            <label className="text-xs text-gray-400">Add</label>
+                            <input
+                                type="number" step="0.25"
+                                name={`${prefix}_OI_Add`}
+                                value={getVal('OI_Add') || ''}
+                                onChange={onInputChange}
+                                className={getInputClass('OI_Add', true)}
+                            />
+                        </div>
                     )}
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
-                <input
-                    name={getKey('DNP')}
-                    value={formState[getKey('DNP')] as string}
-                    placeholder="DNP"
-                    className="input"
-                    onChange={onInputChange}
-                />
+            {/* SELECTORES DE TIPO (DINÁMICO) Y COLOR */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                <div>
+                    <label className="block text-sm text-gray-400 mb-1">Tipo de Cristal</label>
+                    <select
+                        name={`${prefix}_Tipo`}
+                        value={getVal('Tipo') || ''}
+                        onChange={onInputChange}
+                        className={getInputClass('Tipo')}
+                    >
+                        <option value="">Seleccione...</option>
+                        {availableCrystals.map((cristal) => (
+                            <option key={cristal.producto_id || cristal.id} value={cristal.nombre}>
+                                {cristal.nombre} - ${cristal.precio_venta}
+                            </option>
+                        ))}
+                    </select>
+                </div>
 
-                <select
-                    name={getKey('Tipo')}
-                    value={formState[getKey('Tipo')] as string}
-                    onChange={handleTypeChange}
-                    className="input text-gray-700"
-                >
-                    <option value="">Seleccionar Tipo</option>
-                    {GLASS_TYPES.map((type) => (
-                        <option key={type} value={type}>
-                            {type}
-                        </option>
-                    ))}
-                </select>
+                <div>
+                    <label className="block text-sm text-gray-400 mb-1">Color / Tratamiento</label>
+                    <select
+                        name={`${prefix}_Color`}
+                        value={getVal('Color') || ''}
+                        onChange={onInputChange}
+                        className={getInputClass('Color')}
+                    >
+                        <option value="">Ninguno / Blanco</option>
+                        <option value="Fotocromatico">Fotocromático</option>
+                        <option value="Antireflex">Antireflex</option>
+                        <option value="Blue Cut">Blue Cut</option>
+                        <option value="Teñido">Teñido</option>
+                    </select>
+                </div>
 
-                <input
-                    name={getKey('Color')}
-                    value={formState[getKey('Color')] as string}
-                    placeholder="Color"
-                    className="input"
-                    onChange={onInputChange}
-                />
+                <div>
+                    <label className="block text-sm text-gray-400 mb-1">DNP</label>
+                    <input
+                        type="text"
+                        name={`${prefix}_DNP`}
+                        value={getVal('DNP') || ''}
+                        onChange={onInputChange}
+                        className={getInputClass('DNP')}
+                    />
+                </div>
             </div>
-        </section>
+        </div>
     );
 };
