@@ -57,7 +57,9 @@ export const OpticSection: React.FC<OpticSectionProps> = ({
                             <div key={label}>
                                 <label className="text-xs text-white/70 mb-1 block">{label}</label>
                                 <input
-                                    type="number" step="0.25"
+                                    type="text" // Cambiado de number a text
+                                    inputMode="decimal" // Fuerza el teclado numérico con decimales en móvil
+                                    pattern="[0-9.,-]*"
                                     name={`${prefix}_OD_${label}`}
                                     value={getVal(`OD_${label}`) || ''}
                                     onChange={onInputChange}
@@ -70,7 +72,9 @@ export const OpticSection: React.FC<OpticSectionProps> = ({
                         <div className="mt-3">
                             <label className="text-xs text-white/70 mb-1 block">Add</label>
                             <input
-                                type="number" step="0.25"
+                                type="text" // Cambiado de number a text
+                                inputMode="decimal" // Fuerza el teclado numérico con decimales en móvil
+                                pattern="[0-9.,-]*"
                                 name={`${prefix}_OD_Add`}
                                 value={getVal('OD_Add') || ''}
                                 onChange={onInputChange}
@@ -88,7 +92,9 @@ export const OpticSection: React.FC<OpticSectionProps> = ({
                             <div key={label}>
                                 <label className="text-xs text-white/70 mb-1 block">{label}</label>
                                 <input
-                                    type="number" step="0.25"
+                                    type="text" // Cambiado de number a text
+                                    inputMode="decimal" // Fuerza el teclado numérico con decimales en móvil
+                                    pattern="[0-9.,-]*"
                                     name={`${prefix}_OI_${label}`}
                                     value={getVal(`OI_${label}`) || ''}
                                     onChange={onInputChange}
@@ -101,7 +107,9 @@ export const OpticSection: React.FC<OpticSectionProps> = ({
                         <div className="mt-3">
                             <label className="text-xs text-white/70 mb-1 block">Add</label>
                             <input
-                                type="number" step="0.25"
+                                type="text" // Cambiado de number a text
+                                inputMode="decimal" // Fuerza el teclado numérico con decimales en móvil
+                                pattern="[0-9.,-]*"
                                 name={`${prefix}_OI_Add`}
                                 value={getVal('OI_Add') || ''}
                                 onChange={onInputChange}
@@ -151,6 +159,7 @@ export const OpticSection: React.FC<OpticSectionProps> = ({
                     <label className="block text-sm text-white font-medium mb-1">DNP</label>
                     <input
                         type="text"
+                        inputMode="decimal"
                         name={`${prefix}_DNP`}
                         value={getVal('DNP') || ''}
                         onChange={onInputChange}

@@ -14,6 +14,7 @@ import { MultifocalForm } from "./components/MultifocalForm";
 import { FrameSection } from "./components/FrameSection";
 import { SalesItemsList, type CartItem } from "./components/SalesItemsList";
 import { SupervisorAuthModal } from "../components/modals/SupervisorAuthModal";
+import { PrescriptionCapture } from "./components/PrescriptionCapture";
 
 const initialForm: FormValues = {
   clienteName: "",
@@ -640,21 +641,15 @@ export const FormularioVenta: React.FC = () => {
           <DoctorForm
             formState={formState as FormValues}
             onInputChange={onInputChange}
+            setFieldValue={setFieldValue}
             handleSearchDoctor={handleSearchDoctor}
             loading={loading}
           />
 
-          <section className="bg-opacity-10 border border-blanco rounded-xl p-4 my-2">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <span className="text-lg text-blanco">Subir imagen de receta</span>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
-                className="input w-64"
-              />
-            </div>
-          </section>
+          <PrescriptionCapture
+            file={file}
+            setFile={setFile}
+          />
 
           <OpticSection
             title="Lejos"
