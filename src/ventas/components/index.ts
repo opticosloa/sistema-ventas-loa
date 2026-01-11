@@ -1,3 +1,6 @@
+export * from './BotonEntregarTicket';
+export * from './CierreCajaPage';
+export * from './ConfiguracionPage'
 export * from './ConsultaCliente'
 export * from './ConsultaStock';
 export * from './Dashboard';
@@ -14,5 +17,6 @@ export * from './TicketList';
 export * from './TicketModal';
 export * from './ListaTicketsTaller';
 export * from './TicketsHistorial';
+export * from './TicketVenta';
 export * from './UserWidget';
 export * from './HistorialPrescripciones';

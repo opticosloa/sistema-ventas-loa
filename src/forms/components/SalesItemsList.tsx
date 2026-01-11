@@ -12,30 +12,31 @@ export interface CartItem {
 interface SalesItemsListProps {
     items: CartItem[];
     onItemsChange: (items: CartItem[]) => void;
+    dolarRate?: number;
 }
 
-export const SalesItemsList: React.FC<SalesItemsListProps> = ({ items, onItemsChange }) => {
+export const SalesItemsList: React.FC<SalesItemsListProps> = ({ items, onItemsChange, dolarRate = 0 }) => {
     const [showScanner, setShowScanner] = useState(false);
     const [manualCode, setManualCode] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+
+    const getPrice = (product: any) => {
+        const usd = product.precio_usd ? Number(product.precio_usd) : 0;
+        const ars = product.precio_venta ? Number(product.precio_venta) : 0;
+        if (usd > 0 && dolarRate > 0) return usd * dolarRate;
+        return ars;
+    };
 
     const handleAddItem = async (code: string) => {
         if (!code) return;
         setIsLoading(true);
         try {
-            // Buscar producto por QR o ID (asumimos que el backend busca por ambos o codigo)
-            // Endpoint sugerido: /api/products/search?q=CODE or /api/products/by-qr/:qr
-            // Voy a usar un endpoint que busque por QR o nombre
-            // Si no existe, podemos intentar buscar en la lista de todos los productos si está cargada, 
-            // pero mejor hacer fetch al backend para data fresca.
-
-            // Asumiendo endpoint existente GET /api/products/search?q=...
+            // Buscar producto por QR o ID
             const { data } = await LOAApi.get(`/api/products/search?q=${code}`);
             const products: Producto[] = data.result;
 
             if (products && products.length > 0) {
-                // Tomamos el primero (match exacto idealmente)
-                const product = products[0]; // TODO: Mejorar logica de seleccion si hay multiples
+                const product = products[0];
                 addItemToCart(product);
                 setManualCode("");
             } else {
@@ -52,20 +53,16 @@ export const SalesItemsList: React.FC<SalesItemsListProps> = ({ items, onItemsCh
 
     const addItemToCart = (product: Producto) => {
         const existingIndex = items.findIndex(i => i.producto.producto_id === product.producto_id);
+        const price = getPrice(product);
+
         if (existingIndex >= 0) {
             // Update quantity
             const newItems = [...items];
             newItems[existingIndex].cantidad += 1;
-            // Asumimos precio venta es precio_venta o similar. 
-            // Producto type doesn't explicitly show price in previous context? 
-            // I need to check Producto type. Assuming price field exists.
-            // Using placeholder logic for price if not in type.
-            const price = (product as any).precio_venta || (product as any).precio || 0;
             newItems[existingIndex].subtotal = newItems[existingIndex].cantidad * price;
             onItemsChange(newItems);
         } else {
             // Add new
-            const price = (product as any).precio_venta || (product as any).precio || 0;
             onItemsChange([...items, { producto: product, cantidad: 1, subtotal: price }]);
         }
     };
@@ -81,7 +78,7 @@ export const SalesItemsList: React.FC<SalesItemsListProps> = ({ items, onItemsCh
         const newItems = [...items];
         const item = newItems[index];
         item.cantidad = newQty;
-        const price = (item.producto as any).precio_venta || (item.producto as any).precio || 0;
+        const price = getPrice(item.producto);
         item.subtotal = newQty * price;
         onItemsChange(newItems);
     };
@@ -152,7 +149,7 @@ export const SalesItemsList: React.FC<SalesItemsListProps> = ({ items, onItemsCh
                             {items.map((item, idx) => (
                                 <tr key={idx} className="border-b border-white/10 hover:bg-white/5">
                                     <td className="p-2">{item.producto.nombre}</td>
-                                    <td className="p-2 text-right">${((item.producto as any).precio_venta || 0).toLocaleString()}</td>
+                                    <td className="p-2 text-right">${getPrice(item.producto).toLocaleString()}</td>
                                     <td className="p-2 text-center">
                                         <input
                                             type="number"

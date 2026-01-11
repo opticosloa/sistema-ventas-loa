@@ -15,6 +15,8 @@ import { FrameSection } from "./components/FrameSection";
 import { SalesItemsList, type CartItem } from "./components/SalesItemsList";
 import { SupervisorAuthModal } from "../components/modals/SupervisorAuthModal";
 import { PrescriptionCapture } from "./components/PrescriptionCapture";
+import { useReactToPrint } from 'react-to-print';
+import { TicketVenta } from "../ventas/components/TicketVenta";
 
 const initialForm: FormValues = {
   clienteName: "",
@@ -71,10 +73,47 @@ export const FormularioVenta: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [cliente, setCliente] = useState<Cliente | null>(null);
 
+  // Ticket Printing
+  const ticketRef = React.useRef<HTMLDivElement>(null);
+  const [ticketData, setTicketData] = useState<any>(null);
+  const [isPrinting, setIsPrinting] = useState(false);
+
+  const handlePrint = useReactToPrint({
+    contentRef: ticketRef,
+    onAfterPrint: () => {
+      setIsPrinting(false);
+      // Navigate after printing (or if canceled)
+      if (ticketData) {
+        navigate('pago', { state: { ventaId: ticketData.venta.venta_id, total: ticketData.venta.total } });
+      }
+    },
+    onPrintError: () => setIsPrinting(false)
+  });
+
+  useEffect(() => {
+    if (ticketData) {
+      setIsPrinting(true);
+      handlePrint();
+    }
+  }, [ticketData]);
+
   // Crystal Data
   const [availableCrystals, setAvailableCrystals] = useState<any[]>([]);
 
+  // Dolar Rate
+  const [dolarRate, setDolarRate] = useState(0);
+
   useEffect(() => {
+    const fetchRate = async () => {
+      try {
+        const { data } = await LOAApi.get('/api/currency/rate');
+        setDolarRate(data.result.rate || 0);
+      } catch (error) {
+        console.error("Error fetching dolar rate:", error);
+      }
+    };
+    fetchRate();
+
     // Fetch Crystals on mount with type filter
     const fetchCrystals = async () => {
       try {
@@ -106,14 +145,19 @@ export const FormularioVenta: React.FC = () => {
   // Actualizá el useMemo del total
   const totalVenta = React.useMemo(() => {
     const retailTotal = cart.reduce((acc, item) => {
-      const p = (item.producto as any).precio_venta ? parseFloat((item.producto as any).precio_venta) : 0;
-      return acc + (p * item.cantidad);
+      // Calcular precio en ARS al vuelo
+      const prod = item.producto as any;
+      const usd = prod.precio_usd ? parseFloat(prod.precio_usd) : 0;
+      const ars = prod.precio_venta ? parseFloat(prod.precio_venta) : 0;
+
+      const finalPrice = (usd > 0 && dolarRate > 0) ? (usd * dolarRate) : ars;
+      return acc + (finalPrice * item.cantidad);
     }, 0);
     const frameTotal = formState.armazon ? armazonPrecio : 0;
 
     // SUMAMOS CRISTALES y RESTAMOS DESCUENTO
     return retailTotal + frameTotal + cristalesPrecio - (isDiscountAuthorized ? discount : 0);
-  }, [cart, armazonPrecio, formState.armazon, cristalesPrecio, discount, isDiscountAuthorized]);
+  }, [cart, armazonPrecio, formState.armazon, cristalesPrecio, discount, isDiscountAuthorized, dolarRate]);
 
   const navigate = useNavigate();
 
@@ -257,7 +301,13 @@ export const FormularioVenta: React.FC = () => {
 
       const getPrice = (name: string) => {
         const c = availableCrystals.find(x => x.nombre === name);
-        return c ? Number(c.precio_venta) : 0;
+        // Priorizar precio_usd si existe y hay cotización, sino precio_venta (legacy)
+        if (c) {
+          const usdPrice = c.precio_usd ? Number(c.precio_usd) : 0;
+          if (usdPrice > 0 && dolarRate > 0) return usdPrice * dolarRate;
+          return Number(c.precio_venta) || 0;
+        }
+        return 0;
       };
 
       // Lejos (Par) - Multiplicamos x2 porque precio unitario
@@ -283,7 +333,7 @@ export const FormularioVenta: React.FC = () => {
 
       setCristalesPrecio(labPrice);
     }
-  }, [stockStatus, formState.lejos_Tipo, formState.cerca_Tipo, formState.multifocalTipo, availableCrystals]);
+  }, [stockStatus, formState.lejos_Tipo, formState.cerca_Tipo, formState.multifocalTipo, availableCrystals, dolarRate]);
 
 
   // Effect to trigger checks
@@ -577,14 +627,35 @@ export const FormularioVenta: React.FC = () => {
         }
       }
 
-      // If Budget
       if (isBudget) {
         await LOAApi.put(`/api/sales/${ventaId}/budget`);
         alert("Presupuesto guardado correctamente.");
         navigate('/ventas');
       } else {
-        // Proceed to Pay - Pass Calculated Total
-        navigate('pago', { state: { ventaId, total: totalVenta } });
+        // Prepare Ticket Data for printing
+        setTicketData({
+          venta: {
+            venta_id: ventaId,
+            total: totalVenta,
+            descuento: isDiscountAuthorized ? discount : 0,
+            cotizacion_dolar: dolarRate
+          },
+          detalles: cart.map(item => ({
+            producto: item.producto,
+            cantidad: item.cantidad,
+            subtotal: ((item.producto as any).precio_usd && dolarRate > 0 ? Number((item.producto as any).precio_usd) * dolarRate : Number((item.producto as any).precio_venta)) * item.cantidad
+          })),
+          receta: createPrescription ? {
+            ...formState,
+          } : null,
+          cliente: {
+            nombre: clienteName,
+            apellido: clienteApellido,
+            telefono: clienteTelefono
+          }
+        });
+
+        // Navigation will happen in onAfterPrint
       }
 
     } catch (error) {
@@ -754,7 +825,7 @@ export const FormularioVenta: React.FC = () => {
         />
 
         <div className={activeTab === 'retail' ? 'block' : 'hidden'}>
-          <SalesItemsList items={cart} onItemsChange={setCart} />
+          <SalesItemsList items={cart} onItemsChange={setCart} dolarRate={dolarRate} />
         </div>
 
         {/* ACTIONS */}
@@ -767,27 +838,41 @@ export const FormularioVenta: React.FC = () => {
           <button
             type="button"
             onClick={onResetForm}
-            className="btn-secondary"
+            className="btn-secondary ml-auto"
+            disabled={loading}
           >
-            Limpiar
+            ❌ Cancelar
           </button>
 
           <button
             type="button"
             onClick={onBudget}
-            className="bg-yellow-600 hover:bg-yellow-500 text-white font-bold py-2 px-4 rounded"
+            className="btn-secondary"
+            disabled={loading}
           >
-            Guardar Presupuesto
+            📄 Presupuesto
           </button>
 
           <button
             type="submit"
-            className="btn-primary min-w-[200px]"
+            className="btn-primary"
+            disabled={loading || isPrinting}
           >
-            Finalizar Venta
+            {loading || isPrinting ? <span className="animate-spin mr-2">⏳</span> : '✅ Finalizar e Imprimir'}
           </button>
         </div>
       </form>
+
+      {/* Hidden Ticket Component */}
+      <div style={{ display: 'none' }}>
+        <TicketVenta
+          ref={ticketRef}
+          venta={ticketData?.venta}
+          detalles={ticketData?.detalles || []}
+          receta={ticketData?.receta}
+          cliente={ticketData?.cliente}
+        />
+      </div>
     </div>
   );
 };

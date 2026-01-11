@@ -9,7 +9,7 @@
 
 /* Inputs */
 .input {
-  @apply bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-celeste focus:border-celeste transition;
+  @apply bg-crema border border-gray-600 rounded-lg px-3 py-2 text-gray-600 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-celeste focus:border-celeste transition;
 }
 
 /* Botones */

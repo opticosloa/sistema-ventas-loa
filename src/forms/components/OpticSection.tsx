@@ -1,5 +1,6 @@
 import React from 'react';
 import type { FormValues } from '../../types/ventasFormTypes';
+import { useNumericInput } from '../../hooks/useNumericInput';
 
 interface OpticSectionProps {
     title: string;
@@ -23,10 +24,12 @@ export const OpticSection: React.FC<OpticSectionProps> = ({
 
     const getVal = (field: string) => formState[`${prefix}_${field}` as keyof FormValues];
 
+    //  Hook para normalizar inputs numéricos
+    const { handleNumericChange } = useNumericInput(onInputChange);
+
     const getInputClass = (field: string, centerText: boolean = false) => {
         const fieldName = `${prefix}_${field}`;
         const hasError = !!formErrors[fieldName];
-        // Estilo unificado: Fondo claro, texto oscuro, bordes redondeados suaves
         const baseClass = "w-full bg-slate-100 text-slate-900 rounded-md py-1.5 px-3 border-none focus:ring-2 focus:ring-cyan-500 transition-all";
         const alignClass = centerText ? "text-center" : "";
         const errorClass = hasError ? "ring-2 ring-red-500" : "";
@@ -50,19 +53,19 @@ export const OpticSection: React.FC<OpticSectionProps> = ({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* OJO DERECHO */}
-                <div className="bg-white/5 p-4 rounded-lg border border-white/10">
+                <div className="p-4 rounded-lg border border-white">
                     <h4 className="text-cyan-100/80 text-sm font-semibold mb-3 uppercase tracking-wider text-center">Ojo Derecho (OD)</h4>
                     <div className="grid grid-cols-3 gap-3">
                         {['Esf', 'Cil', 'Eje'].map((label) => (
                             <div key={label}>
                                 <label className="text-xs text-white/70 mb-1 block">{label}</label>
                                 <input
-                                    type="text" // Cambiado de number a text
-                                    inputMode="decimal" // Fuerza el teclado numérico con decimales en móvil
-                                    pattern="[0-9.,-]*"
+                                    type="text"
+                                    inputMode="decimal"
+                                    pattern="[0-9.,\-]*"
                                     name={`${prefix}_OD_${label}`}
                                     value={getVal(`OD_${label}`) || ''}
-                                    onChange={onInputChange}
+                                    onChange={handleNumericChange}
                                     className={getInputClass(`OD_${label}`, true)}
                                 />
                             </div>
@@ -72,12 +75,12 @@ export const OpticSection: React.FC<OpticSectionProps> = ({
                         <div className="mt-3">
                             <label className="text-xs text-white/70 mb-1 block">Add</label>
                             <input
-                                type="text" // Cambiado de number a text
-                                inputMode="decimal" // Fuerza el teclado numérico con decimales en móvil
-                                pattern="[0-9.,-]*"
+                                type="text"
+                                inputMode="decimal"
+                                pattern="[0-9.,\-]*"
                                 name={`${prefix}_OD_Add`}
                                 value={getVal('OD_Add') || ''}
-                                onChange={onInputChange}
+                                onChange={handleNumericChange}
                                 className={getInputClass('OD_Add', true)}
                             />
                         </div>
@@ -92,12 +95,12 @@ export const OpticSection: React.FC<OpticSectionProps> = ({
                             <div key={label}>
                                 <label className="text-xs text-white/70 mb-1 block">{label}</label>
                                 <input
-                                    type="text" // Cambiado de number a text
-                                    inputMode="decimal" // Fuerza el teclado numérico con decimales en móvil
-                                    pattern="[0-9.,-]*"
+                                    type="text"
+                                    inputMode="decimal"
+                                    pattern="[0-9.,\-]*"
                                     name={`${prefix}_OI_${label}`}
                                     value={getVal(`OI_${label}`) || ''}
-                                    onChange={onInputChange}
+                                    onChange={handleNumericChange}
                                     className={getInputClass(`OI_${label}`, true)}
                                 />
                             </div>
@@ -107,12 +110,12 @@ export const OpticSection: React.FC<OpticSectionProps> = ({
                         <div className="mt-3">
                             <label className="text-xs text-white/70 mb-1 block">Add</label>
                             <input
-                                type="text" // Cambiado de number a text
-                                inputMode="decimal" // Fuerza el teclado numérico con decimales en móvil
-                                pattern="[0-9.,-]*"
+                                type="text"
+                                inputMode="decimal"
+                                pattern="[0-9.,\-]*"
                                 name={`${prefix}_OI_Add`}
                                 value={getVal('OI_Add') || ''}
-                                onChange={onInputChange}
+                                onChange={handleNumericChange}
                                 className={getInputClass('OI_Add', true)}
                             />
                         </div>
@@ -160,9 +163,10 @@ export const OpticSection: React.FC<OpticSectionProps> = ({
                     <input
                         type="text"
                         inputMode="decimal"
+                        pattern="[0-9.,\-]*" // Regex corregida también aquí
                         name={`${prefix}_DNP`}
                         value={getVal('DNP') || ''}
-                        onChange={onInputChange}
+                        onChange={handleNumericChange} // Usar el normalizador para el DNP
                         className={getInputClass('DNP')}
                         placeholder="Distancia interpupilar"
                     />
