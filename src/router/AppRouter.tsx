@@ -1,5 +1,5 @@
 import { Routes, Route } from 'react-router-dom';
-import { Navbar, ConsultaStock, ConsultaCliente, TicketList, TicketsHistorial, Estadisticas, ListaEmpleados, Home, HistorialPrescripciones, ListaTicketsTaller } from '../ventas/components';
+import { Navbar, ConsultaStock, ConsultaCliente, TicketList, TicketsHistorial, Estadisticas, ListaEmpleados, Home, HistorialPrescripciones, ListaTicketsTaller, ConfiguracionPage, CierreCajaPage } from '../ventas/components';
 import { LoginPage, NotFoundPage, PagoResultadoPage, UnAuthorized, DevolucionesPage } from '../ventas/page';
 
 import { HomePage, EmpleadoHomePage, TallerHomePage } from '../page';
@@ -8,8 +8,8 @@ import { useAuthStore } from '../hooks';
 import { FormularioDePago, FormularioVenta, FormularioProducto, FormularioCristal } from '../forms';
 
 export const AppRouter = () => {
-
   const { status } = useAuthStore();
+
   return (
     <>
       {status === 'authenticated' && <Navbar />}
@@ -21,7 +21,6 @@ export const AppRouter = () => {
 
         {/* PROTEGIDAS */}
         <Route element={<AuthGuard />}>
-
           <Route element={<TenantGuard />}>
 
             {/* ADMIN / SUPERADMIN */}
@@ -34,6 +33,10 @@ export const AppRouter = () => {
                 <Route path="empleados" element={<ListaEmpleados />} />
                 <Route path="taller" element={<TicketList />} />
                 <Route path="devoluciones" element={<DevolucionesPage />} />
+
+                {/* NUEVAS RUTAS ADMIN */}
+                <Route path="configuracion" element={<ConfiguracionPage />} />
+                <Route path="cierre-caja" element={<CierreCajaPage />} />
 
                 <Route element={<RoleGuard allowedRoles={['SUPERADMIN']} />}>
                   <Route path="productos/nuevo" element={<FormularioProducto />} />
@@ -51,9 +54,11 @@ export const AppRouter = () => {
                 <Route path="nueva-venta/pago" element={<FormularioDePago />} />
                 <Route path="clientes/:cliente_id/historial" element={<HistorialPrescripciones />} />
                 <Route path="devoluciones" element={<DevolucionesPage />} />
+
+                {/* NUEVA RUTA EMPLEADO */}
+                <Route path="cierre-caja" element={<CierreCajaPage />} />
               </Route>
             </Route>
-
 
             {/* TALLER */}
             <Route element={<RoleGuard allowedRoles={['ADMIN', 'SUPERADMIN', 'TALLER']} />}>
@@ -73,10 +78,7 @@ export const AppRouter = () => {
 
         <Route path='/' element={<Home />} />
         <Route path="*" element={<NotFoundPage />} />
-
       </Routes>
-
-
     </>
   );
 };

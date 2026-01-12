@@ -42,7 +42,7 @@ export const FrameSection: React.FC<FrameSectionProps> = ({
         <section className="bg-opacity-10 border border-blanco rounded-xl p-4 mt-4">
             <h3 className="text-blanco font-medium mb-3">Armazones (Opcional)</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {renderFrameInput("Armazón", "armazon")}
+                {renderFrameInput(formState.armazon ? "Armazón *" : "Armazón", "armazon")}
             </div>
         </section>
     );

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { QRScanner } from './QRScanner';
+import React, { useState, useRef, useEffect } from 'react';
+import { Search, Package } from 'lucide-react';
 import LOAApi from '../../api/LOAApi';
 import type { Producto } from '../../types/Producto';
 
@@ -16,9 +16,25 @@ interface SalesItemsListProps {
 }
 
 export const SalesItemsList: React.FC<SalesItemsListProps> = ({ items, onItemsChange, dolarRate = 0 }) => {
-    const [showScanner, setShowScanner] = useState(false);
-    const [manualCode, setManualCode] = useState("");
-    const [isLoading, setIsLoading] = useState(false);
+    // Autocomplete State
+    const [searchTerm, setSearchTerm] = useState("");
+    const [results, setResults] = useState<Producto[]>([]);
+    const [showResults, setShowResults] = useState(false);
+    const [isSearching, setIsSearching] = useState(false);
+
+    const searchTimeout = useRef<any>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
+
+    // Cerrar resultados al hacer click fuera
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+                setShowResults(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
 
     const getPrice = (product: any) => {
         const usd = product.precio_usd ? Number(product.precio_usd) : 0;
@@ -27,28 +43,30 @@ export const SalesItemsList: React.FC<SalesItemsListProps> = ({ items, onItemsCh
         return ars;
     };
 
-    const handleAddItem = async (code: string) => {
-        if (!code) return;
-        setIsLoading(true);
-        try {
-            // Buscar producto por QR o ID
-            const { data } = await LOAApi.get(`/api/products/search?q=${code}`);
-            const products: Producto[] = data.result;
+    const handleSearch = (term: string) => {
+        setSearchTerm(term);
+        if (searchTimeout.current) clearTimeout(searchTimeout.current);
 
-            if (products && products.length > 0) {
-                const product = products[0];
-                addItemToCart(product);
-                setManualCode("");
-            } else {
-                alert("Producto no encontrado");
-            }
-
-        } catch (error) {
-            console.error(error);
-            alert("Error buscando producto");
-        } finally {
-            setIsLoading(false);
+        if (term.length < 2) {
+            setResults([]);
+            setShowResults(false);
+            return;
         }
+
+        setIsSearching(true);
+        setShowResults(true);
+
+        searchTimeout.current = setTimeout(async () => {
+            try {
+                // Cambiar a tu endpoint de búsqueda parcial
+                const { data } = await LOAApi.get(`/api/products/search/${term}`);
+                setResults(data.result || []);
+            } catch (err) {
+                console.error("Error buscando productos", err);
+            } finally {
+                setIsSearching(false);
+            }
+        }, 300);
     };
 
     const addItemToCart = (product: Producto) => {
@@ -56,128 +74,127 @@ export const SalesItemsList: React.FC<SalesItemsListProps> = ({ items, onItemsCh
         const price = getPrice(product);
 
         if (existingIndex >= 0) {
-            // Update quantity
             const newItems = [...items];
             newItems[existingIndex].cantidad += 1;
             newItems[existingIndex].subtotal = newItems[existingIndex].cantidad * price;
             onItemsChange(newItems);
         } else {
-            // Add new
             onItemsChange([...items, { producto: product, cantidad: 1, subtotal: price }]);
         }
+        setSearchTerm("");
+        setShowResults(false);
     };
 
-    const handleRemoveItem = (index: number) => {
-        const newItems = [...items];
-        newItems.splice(index, 1);
-        onItemsChange(newItems);
-    };
-
-    const handleQuantityChange = (index: number, newQty: number) => {
-        if (newQty < 1) return;
-        const newItems = [...items];
-        const item = newItems[index];
-        item.cantidad = newQty;
-        const price = getPrice(item.producto);
-        item.subtotal = newQty * price;
-        onItemsChange(newItems);
-    };
-
-    const total = items.reduce((acc, curr) => acc + curr.subtotal, 0);
+    // ... (Mantén handleRemoveItem y handleQuantityChange igual que antes)
 
     return (
-        <section className="bg-opacity-10 border border-blanco rounded-xl p-4 mt-4">
-            {showScanner && (
-                <QRScanner
-                    onScanSuccess={(code) => { setShowScanner(false); handleAddItem(code); }}
-                    onClose={() => setShowScanner(false)}
-                />
-            )}
-
-            <div className="flex justify-between items-center mb-3">
-                <h3 className="text-blanco font-medium">Items de Venta (Carrito)</h3>
-                <div className="flex gap-2">
-                    <input
-                        autoFocus
-                        className="input py-1 px-2 text-sm w-40"
-                        placeholder="Código / Nombre"
-                        value={manualCode}
-                        onChange={e => setManualCode(e.target.value)}
-                        onKeyDown={e => {
-                            if (e.key === 'Enter') {
-                                e.preventDefault();
-                                handleAddItem(manualCode);
-                            }
-                        }}
-                    />
-                    <button
-                        type="button"
-                        onClick={() => handleAddItem(manualCode)}
-                        className="btn-secondary py-1 px-3 text-sm"
-                        disabled={isLoading}
-                    >
-                        +
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setShowScanner(true)}
-                        className="btn-primary py-1 px-3 text-sm flex items-center gap-1"
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 -960 960 960" fill="currentColor"><path d="M40-120v-200h200v200H40Zm80-120h40v-40h-40v40Zm40 0h40v-40h-40v40Zm-40 40h40v-40h-40v40Zm40 0h40v-40h-40v40Zm40 40h40v-40h-40v40Zm0-80h40v-40h-40v40Zm-80 80h40v-40h-40v40Zm320-400v-200h200v200H440Zm240 0h-40v-40h40v40Zm-160-80v-40h40v40h-40Zm80 0v-40h40v40h-40Zm-80 0h-40v-40h40v40Zm80 0h40v-40h-40v40Zm40-40h40v-40h-40v40Zm-80 0h40v-40h-40v40Zm40 80h40v-40h-40v40Zm-40 0v40h40v-40h-40Zm200 520v-200h200v200H720Zm80-120h40v-40h-40v40Zm-40 40h40v-40h-40v40Zm80 0h40v-40h-40v40Zm-40-40h40v-40h-40v40Zm40 0h40v-40h-40v40Zm-40 40v40h40v-40h-40ZM40-440v-200h200v200H40Zm80-120h40v-40h-40v40Zm40 0h40v-40h-40v40Zm-40 40h40v-40h-40v40Zm40 0h40v-40h-40v40Zm40 40h40v-40h-40v40Zm0-80h40v-40h-40v40Zm-80 80h40v-40h-40v40Zm320 320v-200h200v200H440Zm80-120h40v-40h-40v40Zm-40 40h40v-40h-40v40Zm80 0h40v-40h-40v40Zm-40-40h40v-40h-40v40Zm40 0h40v-40h-40v40Zm-40 40v40h40v-40h-40Z" /></svg>
-                        Scan
-                    </button>
-                </div>
+        <section className="bg-white/5 border border-white/20 rounded-xl p-4 mt-4" ref={containerRef}>
+            <div className="flex justify-between items-center mb-4">
+                <h3 className="text-white font-bold flex items-center gap-2">
+                    <Package size={18} className="text-cyan-400" />
+                    Items de Venta
+                </h3>
             </div>
 
-            {items.length === 0 ? (
-                <div className="text-blanco/50 text-center py-4 text-sm bg-black/20 rounded">
-                    Sin items. Escanea o busca productos.
+            {/* Buscador Autocomplete */}
+            <div className="relative mb-6">
+                <div className="relative">
+                    <input
+                        type="text"
+                        className="w-full bg-slate-50 text-slate-900 rounded-lg py-2.5 pl-10 pr-4 outline-none focus:ring-2 focus:ring-cyan-500"
+                        placeholder="Buscar producto por nombre o ID..."
+                        value={searchTerm}
+                        onChange={(e) => handleSearch(e.target.value)}
+                    />
+                    <Search className="absolute left-3 top-3 text-slate-400" size={18} />
+                    {isSearching && (
+                        <div className="absolute right-3 top-3 w-5 h-5 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
+                    )}
                 </div>
-            ) : (
-                <div className="overflow-x-auto">
-                    <table className="w-full text-sm text-blanco">
-                        <thead className="bg-white/10">
-                            <tr>
-                                <th className="p-2 text-left">Producto</th>
-                                <th className="p-2 text-right">Precio</th>
-                                <th className="p-2 text-center">Cant</th>
-                                <th className="p-2 text-right">Subtotal</th>
-                                <th className="p-2"></th>
+
+                {/* Dropdown de Resultados */}
+                {showResults && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-2xl border border-slate-200 z-50 max-h-64 overflow-y-auto">
+                        {results.length > 0 ? (
+                            results.map((prod) => (
+                                <button
+                                    key={prod.producto_id}
+                                    type="button"
+                                    onClick={() => addItemToCart(prod)}
+                                    className="w-full text-left px-4 py-3 hover:bg-cyan-50 border-b border-slate-100 last:border-0 flex justify-between items-center transition-colors"
+                                >
+                                    <div>
+                                        <div className="font-bold text-slate-800">{prod.nombre}</div>
+                                        <div className="text-xs text-slate-500">Stock: {prod.stock} | Ubicación: {prod.ubicacion || 'N/A'}</div>
+                                    </div>
+                                    <div className="text-cyan-600 font-bold">
+                                        {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(getPrice(prod))}
+                                    </div>
+                                </button>
+                            ))
+                        ) : (
+                            <div className="p-4 text-center text-slate-500 text-sm">
+                                No se encontraron productos.
+                            </div>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* Tabla de Carrito */}
+            <div className="mt-6 overflow-x-auto">
+                {items.length === 0 ? (
+                    <div className="text-center py-8 text-gray-400 bg-white/5 rounded-lg border border-dashed border-gray-600/50">
+                        No hay productos agregados al carrito de venta directa.
+                    </div>
+                ) : (
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="text-celeste border-b border-gray-600/50">
+                                <th className="p-3 font-semibold text-blanco">Producto</th>
+                                <th className="p-3 font-semibold text-blanco text-right">Precio Unit.</th>
+                                <th className="p-3 font-semibold text-blanco text-center">Cant.</th>
+                                <th className="p-3 font-semibold text-blanco text-right">Subtotal</th>
+                                <th className="p-3 font-semibold text-blanco text-center">Acción</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            {items.map((item, idx) => (
-                                <tr key={idx} className="border-b border-white/10 hover:bg-white/5">
-                                    <td className="p-2">{item.producto.nombre}</td>
-                                    <td className="p-2 text-right">${getPrice(item.producto).toLocaleString()}</td>
-                                    <td className="p-2 text-center">
-                                        <input
-                                            type="number"
-                                            value={item.cantidad}
-                                            onChange={e => handleQuantityChange(idx, parseInt(e.target.value))}
-                                            className="w-12 text-center p-1 rounded text-black font-bold"
-                                            min="1"
-                                        />
+                        <tbody className="divide-y divide-gray-700/50">
+                            {items.map((item, index) => (
+                                <tr key={index} className="hover:bg-white/5 transition-colors">
+                                    <td className="p-3">
+                                        <div className="font-medium text-white">{item.producto.nombre}</div>
                                     </td>
-                                    <td className="p-2 text-right font-bold">${item.subtotal.toLocaleString()}</td>
-                                    <td className="p-2 text-center">
-                                        <button onClick={() => handleRemoveItem(idx)} className="text-red-400 hover:text-red-300">
-                                            ✕
+                                    <td className="p-3 text-right text-gray-300">
+                                        {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(
+                                            (item.subtotal && item.cantidad) ? (item.subtotal / item.cantidad) : getPrice(item.producto)
+                                        )}
+                                    </td>
+                                    <td className="p-3 text-center">
+                                        <span className="bg-slate-700/50 text-white py-1 px-3 rounded-md text-sm font-bold">
+                                            {item.cantidad}
+                                        </span>
+                                    </td>
+                                    <td className="p-3 text-right text-green-400 font-bold">
+                                        {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(item.subtotal || 0)}
+                                    </td>
+                                    <td className="p-3 text-center">
+                                        <button
+                                            onClick={() => {
+                                                const newItems = items.filter((_, i) => i !== index);
+                                                onItemsChange(newItems);
+                                            }}
+                                            className="text-red-400 hover:text-red-300 hover:bg-red-400/10 p-2 rounded-full transition-colors"
+                                            title="Eliminar ítem"
+                                        >
+                                            ❌
                                         </button>
                                     </td>
                                 </tr>
                             ))}
                         </tbody>
-                        <tfoot className="bg-white/10 font-bold">
-                            <tr>
-                                <td colSpan={3} className="p-2 text-right">Total Items:</td>
-                                <td className="p-2 text-right">${total.toLocaleString()}</td>
-                                <td></td>
-                            </tr>
-                        </tfoot>
                     </table>
-                </div>
-            )}
+                )}
+            </div>
         </section>
     );
 };

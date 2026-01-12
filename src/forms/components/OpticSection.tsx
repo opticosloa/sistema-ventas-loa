@@ -58,7 +58,9 @@ export const OpticSection: React.FC<OpticSectionProps> = ({
                     <div className="grid grid-cols-3 gap-3">
                         {['Esf', 'Cil', 'Eje'].map((label) => (
                             <div key={label}>
-                                <label className="text-xs text-white/70 mb-1 block">{label}</label>
+                                <label className="text-xs text-white/70 mb-1 block">
+                                    {label} {label === 'Esf' && <span className="text-red-500">*</span>}
+                                </label>
                                 <input
                                     type="text"
                                     inputMode="decimal"
@@ -66,7 +68,7 @@ export const OpticSection: React.FC<OpticSectionProps> = ({
                                     name={`${prefix}_OD_${label}`}
                                     value={getVal(`OD_${label}`) || ''}
                                     onChange={handleNumericChange}
-                                    className={getInputClass(`OD_${label}`, true)}
+                                    className={getInputClass(`OD_${label}`)}
                                 />
                             </div>
                         ))}
@@ -88,7 +90,7 @@ export const OpticSection: React.FC<OpticSectionProps> = ({
                 </div>
 
                 {/* OJO IZQUIERDO */}
-                <div className="bg-white/5 p-4 rounded-lg border border-white/10">
+                <div className="p-4 rounded-lg border border-white">
                     <h4 className="text-cyan-100/80 text-sm font-semibold mb-3 uppercase tracking-wider text-center">Ojo Izquierdo (OI)</h4>
                     <div className="grid grid-cols-3 gap-3">
                         {['Esf', 'Cil', 'Eje'].map((label) => (
@@ -126,7 +128,9 @@ export const OpticSection: React.FC<OpticSectionProps> = ({
             {/* SELECTORES DE TIPO Y COLOR */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
                 <div>
-                    <label className="block text-sm text-white font-medium mb-1">Tipo de Cristal</label>
+                    <label className="block text-sm text-white font-medium mb-1">
+                        Tipo de Cristal <span className="text-red-500">*</span>
+                    </label>
                     <select
                         name={`${prefix}_Tipo`}
                         value={getVal('Tipo') || ''}

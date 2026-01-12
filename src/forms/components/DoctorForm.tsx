@@ -13,11 +13,13 @@ interface DoctorFormProps {
     // But keeping it for backward compatibility if parent passes it, though we might not use it directly in the new UI flow
     handleSearchDoctor?: () => void;
     loading?: boolean;
+    formErrors?: Record<string, string>;
 }
 
 export const DoctorForm: React.FC<DoctorFormProps> = ({
     formState,
     setFieldValue,
+    formErrors = {}
 }) => {
     // Autocomplete State
     const [searchTerm, setSearchTerm] = useState('');
@@ -84,8 +86,9 @@ export const DoctorForm: React.FC<DoctorFormProps> = ({
         // Update Parent Form
         setFieldValue('doctorNombre', doc.especialidad ? `${doc.nombre} - ${doc.especialidad}` : doc.nombre);
         setFieldValue('doctorMatricula', doc.matricula || '');
-        // We might also want to store doctor_id if form supports it, but currently it seems to rely on matricula string mostly?
-        // Checking formState interface... usually has doctorMatricula.
+        if (doc.doctor_id) {
+            setFieldValue('doctor_id', doc.doctor_id);
+        }
 
         setSearchTerm(''); // Clear search or set to selected? Usually clear search input to show "Selected" state or fill it with name.
         // Let's clear search input and rely on the display of "Médico Seleccionado" below or inside.
@@ -97,6 +100,7 @@ export const DoctorForm: React.FC<DoctorFormProps> = ({
     const clearSelection = () => {
         setFieldValue('doctorNombre', '');
         setFieldValue('doctorMatricula', '');
+        setFieldValue('doctor_id', '');
         setSearchTerm('');
     };
 
@@ -128,14 +132,16 @@ export const DoctorForm: React.FC<DoctorFormProps> = ({
 
                 {/* Search / Autocomplete Input */}
                 <div className="relative">
-                    <label className="text-sm text-blanco mb-1 block">Buscar Médico (Nombre o Matrícula)</label>
+                    <label className="text-sm text-blanco mb-1 block">
+                        Buscar Médico (Nombre o Matrícula) <span className="text-red-500">*</span>
+                    </label>
                     <div className="relative">
                         <input
                             type="text"
                             value={searchTerm}
                             onChange={(e) => handleSearch(e.target.value)}
                             placeholder="Escriba para buscar..."
-                            className="w-full bg-slate-50 text-slate-900 rounded-md py-2 pl-9 pr-4 border-none focus:ring-2 focus:ring-cyan-500"
+                            className={`w-full bg-slate-50 text-slate-900 rounded-md py-2 pl-9 pr-4 border-none focus:ring-2 focus:ring-cyan-500 ${formErrors['doctorNombre'] ? 'ring-2 ring-red-500' : ''}`}
                             disabled={isDoctorSelected} // Disable search if already selected? Or allow to change? 
                         // If selected, maybe show the selected name and a clear button.
                         // Better: If selected, this input shows the selected name.

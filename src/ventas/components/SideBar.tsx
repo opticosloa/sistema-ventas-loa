@@ -44,36 +44,29 @@ export const SideBar = () => {
         </div>
 
         {/* Links con NavLink para evitar recargas */}
-        <nav className="flex flex-col p-4 space-y-2">
-          <NavLink
-            to="/taller/lista"
-            className={linkClass}
-            onClick={toggleSideBar}
-          >
-            Taller
-          </NavLink>
-          <NavLink
-            to="/admin"
-            className={linkClass}
-            onClick={toggleSideBar}
-          >
-            Admin
-          </NavLink>
-          <NavLink
-            to="/empleado"
-            className={linkClass}
-            onClick={toggleSideBar}
-          >
-            Empleado
-          </NavLink>
 
-          {/* Currency Config - Restricted to ADMIN/SUPERADMIN */}
-          {['ADMIN', 'SUPERADMIN'].includes(role) && (
+        <nav className="flex flex-col p-4 space-y-2">
+          {/* Rutas Principales */}
+          <NavLink to="/taller/lista" className={linkClass} onClick={toggleSideBar}>Taller</NavLink>
+          <NavLink to="/admin" className={linkClass} onClick={toggleSideBar}>Admin</NavLink>
+          <NavLink to="/empleado" className={linkClass} onClick={toggleSideBar}>Empleado</NavLink>
+
+          <div className="border-b border-celeste/20 my-2"></div>
+
+          {/* Cierre de Caja - Disponible para quienes venden */}
+          {['ADMIN', 'SUPERADMIN', 'EMPLEADO'].includes(role) && (
             <NavLink
-              to="/admin/configuracion"
+              to={role === 'EMPLEADO' ? "/empleado/cierre-caja" : "/admin/cierre-caja"}
               className={linkClass}
               onClick={toggleSideBar}
             >
+              Cierre de Caja
+            </NavLink>
+          )}
+
+          {/* Configuración de Divisas - Solo Admins */}
+          {['ADMIN', 'SUPERADMIN'].includes(role) && (
+            <NavLink to="/admin/configuracion" className={linkClass} onClick={toggleSideBar}>
               Configuración de Divisas
             </NavLink>
           )}

@@ -117,7 +117,7 @@ export const FormularioVenta: React.FC = () => {
     // Fetch Crystals on mount with type filter
     const fetchCrystals = async () => {
       try {
-        const { data } = await LOAApi.get('/api/products', { params: { tipo: 'CRISTAL' } });
+        const { data } = await LOAApi.get('/api/products/type/CRISTAL');
         // Backend returns { success: true, result: [...] }
         const crystals = Array.isArray(data.result) ? data.result : [];
         setAvailableCrystals(crystals);
@@ -186,6 +186,7 @@ export const FormularioVenta: React.FC = () => {
     lejos_OI_Cil,
     lejos_OI_Eje,
     cerca_OD_Esf,
+    cerca_OI_Esf,
     multifocalTipo,
     DI_Lejos,
     DI_Cerca,
@@ -243,21 +244,22 @@ export const FormularioVenta: React.FC = () => {
     cerca: { OD: null, OI: null }
   });
 
+  // 1. Nueva lógica de verificación de stock y advertencia
   const checkCrystalStock = async (prefix: 'lejos' | 'cerca', ojo: 'OD' | 'OI') => {
     const esf = formState[`${prefix}_${ojo}_Esf` as keyof FormValues];
     const cil = formState[`${prefix}_${ojo}_Cil` as keyof FormValues];
-    const tipo = formState[`${prefix}_Tipo` as keyof FormValues];
-    const color = formState[`${prefix}_Color` as keyof FormValues];
+    const tipoNombre = formState[`${prefix}_Tipo` as keyof FormValues]; // El nombre seleccionado en el select
 
-    if (!esf || !cil || !tipo) return;
+    if (!esf || !cil || !tipoNombre) return;
 
     try {
+      // Buscamos si existe la graduación exacta para ese material/tipo
       const { data } = await LOAApi.get(`/api/crystals/check-stock`, {
         params: {
           esfera: esf,
           cilindro: cil,
-          material: tipo,
-          tratamiento: color || 'Blanco'
+          material: tipoNombre,
+          // El color/tratamiento ya suele estar implícito en el nombre del tipo de producto CRISTAL
         }
       });
 
@@ -265,76 +267,67 @@ export const FormularioVenta: React.FC = () => {
         ...prev,
         [prefix]: {
           ...prev[prefix],
-          [ojo]: data.result
+          [ojo]: data.result // data.result es el objeto producto del stock o null
         }
       }));
 
     } catch (error) {
-      console.error("Stock check failed", error);
+      console.error("Error al verificar stock físico:", error);
     }
   };
 
-  // --- CORRECCIÓN 2: Lógica de Precio Unificada y bien cerrada ---
+  // 2. Lógica de Precio Unificada con prioridad de Stock
   useEffect(() => {
-    let totalCalculado = 0;
-    let foundStock = false;
+    let labPrice = 0;
 
-    const addFn = (item: any) => {
-      if (item && item.precio_venta) {
-        totalCalculado += Number(item.precio_venta);
-        foundStock = true;
-      }
+    // Función auxiliar para obtener el precio base de un cristal del catálogo (convertido a pesos si es necesario)
+    const getCatalogPrice = (name: string) => {
+      const product = availableCrystals.find(x => x.nombre === name);
+      if (!product) return 0;
+
+      const usdPrice = product.precio_usd ? Number(product.precio_usd) : 0;
+      if (usdPrice > 0 && dolarRate > 0) return usdPrice * dolarRate;
+      return Number(product.precio_venta) || 0;
     };
 
-    // Sumar stock encontrado
-    addFn(stockStatus.lejos.OD);
-    addFn(stockStatus.lejos.OI);
-    addFn(stockStatus.cerca.OD);
-    addFn(stockStatus.cerca.OI);
+    // --- PROCESAR LEJOS ---
+    if (formState.lejos_Tipo) {
+      const basePrice = getCatalogPrice(formState.lejos_Tipo);
 
-    if (foundStock) {
-      // Si hay stock, usamos ese precio
-      setCristalesPrecio(totalCalculado);
-    } else {
-      // Si NO hay stock, calculamos precio de laboratorio basado en el Tipo (usando availableCrystals)
-      let labPrice = 0;
+      // Ojo Derecho Lejos
+      const stockOD = stockStatus.lejos.OD;
+      const priceOD = stockOD ? Number(stockOD.precio_venta) : basePrice;
 
-      const getPrice = (name: string) => {
-        const c = availableCrystals.find(x => x.nombre === name);
-        // Priorizar precio_usd si existe y hay cotización, sino precio_venta (legacy)
-        if (c) {
-          const usdPrice = c.precio_usd ? Number(c.precio_usd) : 0;
-          if (usdPrice > 0 && dolarRate > 0) return usdPrice * dolarRate;
-          return Number(c.precio_venta) || 0;
-        }
-        return 0;
-      };
+      // Ojo Izquierdo Lejos
+      const stockOI = stockStatus.lejos.OI;
+      const priceOI = stockOI ? Number(stockOI.precio_venta) : basePrice;
 
-      // Lejos (Par) - Multiplicamos x2 porque precio unitario
-      if (formState.lejos_Tipo) {
-        labPrice += getPrice(formState.lejos_Tipo) * 2;
-      }
-
-      // Cerca (Par) - Multiplicamos x2
-      if (formState.cerca_Tipo) {
-        labPrice += getPrice(formState.cerca_Tipo) * 2;
-      }
-
-      // Multifocal (Unidad/Par según criterio) - Asumimos precio par en DB o unitario*2? 
-      // USER PROMPT: "Suma este precio al total". 
-      // User anterior dijo "multiplicar por 2 Lejos y Cerca". Multifocal suele ser por par en lista, pero si es unitario, x2.
-      // Vamos a asumir par x1 si es multifocal, o x2 si es lente de contacto. 
-      // Por consistencia con Lejos/Cerca, si es "Lente", es x2. Pero Multifocal suele venderse el par.
-      // Dejamos x1 por defecto o x2 si el user no especificó.
-      // REVISIT: Previous prompt said "multiplicar por 2 Lejos y Cerca".
-      if (formState.multifocalTipo) {
-        labPrice += getPrice(formState.multifocalTipo);
-      }
-
-      setCristalesPrecio(labPrice);
+      labPrice += (priceOD + priceOI);
     }
-  }, [stockStatus, formState.lejos_Tipo, formState.cerca_Tipo, formState.multifocalTipo, availableCrystals, dolarRate]);
 
+    // --- PROCESAR CERCA ---
+    if (formState.cerca_Tipo) {
+      const basePrice = getCatalogPrice(formState.cerca_Tipo);
+
+      // Ojo Derecho Cerca
+      const stockOD = stockStatus.cerca.OD;
+      const priceOD = stockOD ? Number(stockOD.precio_venta) : basePrice;
+
+      // Ojo Izquierdo Cerca
+      const stockOI = stockStatus.cerca.OI;
+      const priceOI = stockOI ? Number(stockOI.precio_venta) : basePrice;
+
+      labPrice += (priceOD + priceOI);
+    }
+
+    // --- PROCESAR MULTIFOCAL ---
+    if (formState.multifocalTipo) {
+      labPrice += getCatalogPrice(formState.multifocalTipo); // Generalmente multifocal se vende por par
+    }
+
+    setCristalesPrecio(labPrice);
+
+  }, [stockStatus, formState.lejos_Tipo, formState.cerca_Tipo, formState.multifocalTipo, availableCrystals, dolarRate]);
 
   // Effect to trigger checks
   useEffect(() => {
@@ -355,47 +348,49 @@ export const FormularioVenta: React.FC = () => {
 
 
   // PREPARAR DATOS PARA ENVIO
+  const valOrNull = (val: any) => (val === "" || val === undefined || val === null) ? null : val;
+
   const lejos = {
     OD: {
-      esfera: formState.lejos_OD_Esf || null,
-      cilindro: formState.lejos_OD_Cil || null,
-      eje: formState.lejos_OD_Eje || null,
-      add: formState.lejos_OD_Add || null,
+      esfera: valOrNull(formState.lejos_OD_Esf),
+      cilindro: valOrNull(formState.lejos_OD_Cil),
+      eje: valOrNull(formState.lejos_OD_Eje),
+      add: valOrNull(formState.lejos_OD_Add),
     },
     OI: {
-      esfera: formState.lejos_OI_Esf || null,
-      cilindro: formState.lejos_OI_Cil || null,
-      eje: formState.lejos_OI_Eje || null,
-      add: formState.lejos_OI_Add || null,
+      esfera: valOrNull(formState.lejos_OI_Esf),
+      cilindro: valOrNull(formState.lejos_OI_Cil),
+      eje: valOrNull(formState.lejos_OI_Eje),
+      add: valOrNull(formState.lejos_OI_Add),
     },
-    dnp: formState.lejos_DNP || null,
-    tipo: formState.lejos_Tipo || null,
-    color: formState.lejos_Color || null,
-    armazon: formState.armazon || null,
+    dnp: valOrNull(formState.lejos_DNP),
+    tipo: valOrNull(formState.lejos_Tipo),
+    color: valOrNull(formState.lejos_Color),
+    armazon: valOrNull(formState.armazon),
   };
 
   const cerca = {
     OD: {
-      esfera: formState.cerca_OD_Esf || null,
-      cilindro: formState.cerca_OD_Cil || null,
-      eje: formState.cerca_OD_Eje || null,
+      esfera: valOrNull(formState.cerca_OD_Esf),
+      cilindro: valOrNull(formState.cerca_OD_Cil),
+      eje: valOrNull(formState.cerca_OD_Eje),
     },
     OI: {
-      esfera: formState.cerca_OI_Esf || null,
-      cilindro: formState.cerca_OI_Cil || null,
-      eje: formState.cerca_OI_Eje || null,
+      esfera: valOrNull(formState.cerca_OI_Esf),
+      cilindro: valOrNull(formState.cerca_OI_Cil),
+      eje: valOrNull(formState.cerca_OI_Eje),
     },
-    dnp: formState.cerca_DNP || null,
-    tipo: formState.cerca_Tipo || null,
-    color: formState.cerca_Color || null,
-    armazon: formState.armazon || null,
+    dnp: valOrNull(formState.cerca_DNP),
+    tipo: valOrNull(formState.cerca_Tipo),
+    color: valOrNull(formState.cerca_Color),
+    armazon: valOrNull(formState.armazon),
   };
 
   const multifocal = {
-    tipo: multifocalTipo || null,
-    di_lejos: DI_Lejos || null,
-    di_cerca: DI_Cerca || null,
-    altura: Altura || null,
+    tipo: valOrNull(multifocalTipo),
+    di_lejos: valOrNull(DI_Lejos),
+    di_cerca: valOrNull(DI_Cerca),
+    altura: valOrNull(Altura),
   };
 
   const handleSearchClick = async () => {
@@ -544,13 +539,61 @@ export const FormularioVenta: React.FC = () => {
       return;
     }
 
-    // Cliente Validation
+    // --- VALIDATION LOGIC START ---
+    const newErrors: Record<string, string> = {};
+
+    // 1. Validate Client
+    if (!cliente?.cliente_id && (!clienteName || !clienteApellido || !clienteDNI)) {
+      if (!clienteName) newErrors.clienteName = 'Requerido';
+      if (!clienteApellido) newErrors.clienteApellido = 'Requerido';
+      if (!clienteDNI) newErrors.clienteDNI = 'Requerido';
+    }
+
+    // 2. Validate Optic Data if Prescribing
+    if (createPrescription) {
+      // Validate Doctor
+      if (!doctorMatricula || !formState.doctorNombre) {
+        newErrors.doctorNombre = 'Médico requerido';
+      }
+
+      // Validate Crystals (At least one eye needs Esf + Type)
+      // Check Lejos
+      const hasLejosOD = !!lejos_OD_Esf;
+      const hasLejosOI = !!lejos_OI_Esf;
+      if (hasLejosOD || hasLejosOI) {
+        if (hasLejosOD && !formState.lejos_Tipo) newErrors.lejos_Tipo = 'Requerido';
+        if (hasLejosOI && !formState.lejos_Tipo) newErrors.lejos_Tipo = 'Requerido';
+      }
+
+      // Check Cerca
+      const hasCercaOD = !!cerca_OD_Esf;
+      const hasCercaOI = !!cerca_OI_Esf;
+      if (hasCercaOD || hasCercaOI) {
+        if (hasCercaOD && !formState.cerca_Tipo) newErrors.cerca_Tipo = 'Requerido';
+        if (hasCercaOI && !formState.cerca_Tipo) newErrors.cerca_Tipo = 'Requerido';
+      }
+
+      // General Prescription check (if it's not armazon only)
+      const hasOpticalData = hasLejosOD || hasLejosOI || hasCercaOD || hasCercaOI || multifocalTipo;
+
+      // If no optical data and no armazon, why are we here? (already checked above)
+      if (hasOpticalData && !formState.lejos_Tipo && !formState.cerca_Tipo && !multifocalTipo) {
+        // If they filled esf/cil/eje but NO Tipo, error
+        newErrors.general = "Debe seleccionar Tipo de Cristal";
+      }
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setFormErrors(newErrors);
+      alert("Por favor complete los campos obligatorios marcados en rojo.");
+      return;
+    }
+    setFormErrors({});
+    // --- VALIDATION LOGIC END ---
+
+    // Cliente Validation (Create if new)
     let finalClienteId = cliente?.cliente_id;
     if (!finalClienteId) {
-      if (!clienteName || !clienteApellido) {
-        alert("Cliente requerido");
-        return;
-      }
       try {
         const newClientPayload = {
           nombre: clienteName,
@@ -574,6 +617,42 @@ export const FormularioVenta: React.FC = () => {
     try {
       let ventaId: number | null = null;
 
+      (obj: any) => Object.values(obj).some(x => x !== null && x !== "");
+
+      const sanitizeValue = (val: any): any => {
+        if (val === "") return null;
+        if (val && typeof val === 'object' && !Array.isArray(val)) {
+          const cleaned: any = {};
+          Object.keys(val).forEach(key => {
+            cleaned[key] = sanitizeValue(val[key]);
+          });
+          return cleaned;
+        }
+        return val;
+      };
+
+      // Helper to clean section: send {} if empty, otherwise return sanitized object
+      const cleanSection = (section: any) => {
+        // First sanitize the section to ensure "" -> null
+        const sanitized = sanitizeValue(section);
+
+        // Check if it has any meaningful data
+        // For Lejos: OD, OI, dnp, tipo, color
+        // We check if "sanitized" has any non-null fields relevant
+        // Logic: Check if OD/OI have any non-null values
+        const sectionHasData = (s: any) => {
+          if (s.tipo || s.armazon || s.dnp || s.color) return true;
+          // Check if OD/OI have any non-null (meaningful) values
+          if (s.OD && Object.values(s.OD).some(v => v !== null)) return true;
+          if (s.OI && Object.values(s.OI).some(v => v !== null)) return true;
+
+          return false;
+        };
+
+        if (sectionHasData(sanitized)) return sanitized;
+        return {};
+      };
+
       if (createPrescription) {
         // Create Prescription + Sale
         let imageUrl: string | null = null;
@@ -584,21 +663,36 @@ export const FormularioVenta: React.FC = () => {
           imageUrl = uploadRes.data.imageUrl;
         }
 
+
+        console.log("🛒 Cart before payload:", JSON.stringify(cart, null, 2));
+
+        const getUnitPrice = (item: CartItem) => {
+          // Prioritize calculated unit price if available, otherwise division
+          if (item.subtotal && item.cantidad) return item.subtotal / item.cantidad;
+          return (item.producto as any).precio_venta || 0;
+        };
+
         const payload = {
-          cliente_id: finalClienteId,
+          cliente_id: finalClienteId || null,
           cliente: undefined,
           obraSocial: clienteObraSocial || null,
-          doctor_id: null,
-          matricula: doctorMatricula,
-          fecha: clienteFechaRecibido,
-          lejos,
-          cerca,
-          multifocal,
+          doctor_id: valOrNull((formState as any).doctor_id) || null,
+          matricula: valOrNull(doctorMatricula),
+          fecha: clienteFechaRecibido ? clienteFechaRecibido.split('T')[0] : null,
+          lejos: cleanSection(lejos),
+          cerca: cleanSection(cerca),
+          multifocal: (multifocal.tipo && multifocal.tipo !== "") ? multifocal : {},
           observaciones: Observacion || null,
           image_url: imageUrl,
+          items: cart.map(item => ({
+            producto_id: item.producto.producto_id,
+            cantidad: item.cantidad,
+            precio_unitario: getUnitPrice(item)
+          })),
           descuento: isDiscountAuthorized ? discount : 0
         };
 
+        console.log("🚀 Payload Final:", JSON.stringify(payload, null, 2));
         const res = await LOAApi.post('/api/prescriptions', payload);
         ventaId = res.data.venta_id;
 
@@ -607,25 +701,18 @@ export const FormularioVenta: React.FC = () => {
         const salePayload = {
           cliente_id: finalClienteId,
           urgente: false,
-          descuento: isDiscountAuthorized ? discount : 0
+          descuento: isDiscountAuthorized ? discount : 0,
+          items: cart.map(item => ({
+            producto_id: item.producto.producto_id,
+            cantidad: item.cantidad,
+            precio_unitario: (item.subtotal && item.cantidad ? item.subtotal / item.cantidad : ((item.producto as any).precio_venta || 0))
+          }))
         };
         const saleRes = await LOAApi.post('/api/sales', salePayload);
         ventaId = saleRes.data.venta_id;
       }
 
       if (!ventaId) throw new Error("No se pudo crear la venta");
-
-      // Add Cart Items
-      if (cart.length > 0) {
-        for (const item of cart) {
-          await LOAApi.post('/api/sales-items', {
-            venta_id: ventaId,
-            producto_id: item.producto.producto_id,
-            cantidad: item.cantidad,
-            precio_unitario: (item.producto as any).precio_venta || 0
-          });
-        }
-      }
 
       if (isBudget) {
         await LOAApi.put(`/api/sales/${ventaId}/budget`);
@@ -658,14 +745,16 @@ export const FormularioVenta: React.FC = () => {
         // Navigation will happen in onAfterPrint
       }
 
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      alert("Error procesando la operación");
+      const msg = error.response?.data?.message || error.message || "Error procesando la operación";
+      alert(`Error: ${msg}`);
     }
   };
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log(e)
     processSale(false);
   };
 
@@ -687,6 +776,7 @@ export const FormularioVenta: React.FC = () => {
           onInputChange={onInputChange}
           handleSearchClick={handleSearchClick}
           loading={loading}
+          formErrors={formErrors}
         />
 
         {/* SECTION: TABS */}
@@ -715,6 +805,7 @@ export const FormularioVenta: React.FC = () => {
             setFieldValue={setFieldValue}
             handleSearchDoctor={handleSearchDoctor}
             loading={loading}
+            formErrors={formErrors}
           />
 
           <PrescriptionCapture
@@ -775,6 +866,9 @@ export const FormularioVenta: React.FC = () => {
               onChange={(e) => setCristalesPrecio(parseFloat(e.target.value) || 0)}
             />
           </div>
+
+          <SalesItemsList items={cart} onItemsChange={setCart} dolarRate={dolarRate} />
+
         </div>
 
         {/* SECTION: DISCOUNT & TOTAL (Shared) */}
@@ -796,7 +890,7 @@ export const FormularioVenta: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowSupervisorModal(true)}
-                    className="btn-warning text-xs py-1 px-2"
+                    className="btn-warning hover:opacity-75 text-xs py-1 px-2"
                   >
                     🔓 Autorizar
                   </button>
@@ -808,8 +902,10 @@ export const FormularioVenta: React.FC = () => {
               </div>
             </div>
             <div>
-              <span className="text-xl text-white font-bold">Total a Pagar: </span>
-              <span className="text-2xl text-crema font-bold">${totalVenta.toLocaleString()}</span>
+              <span className="text-xl text-white font-bold">Total a Pagar (ARS): </span>
+              <span className="text-2xl text-crema font-bold">
+                {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(totalVenta)}
+              </span>
             </div>
           </div>
         </div>
@@ -841,7 +937,7 @@ export const FormularioVenta: React.FC = () => {
             className="btn-secondary ml-auto"
             disabled={loading}
           >
-            ❌ Cancelar
+            Cancelar
           </button>
 
           <button
@@ -850,7 +946,7 @@ export const FormularioVenta: React.FC = () => {
             className="btn-secondary"
             disabled={loading}
           >
-            📄 Presupuesto
+            Imprimir Presupuesto
           </button>
 
           <button
@@ -858,7 +954,7 @@ export const FormularioVenta: React.FC = () => {
             className="btn-primary"
             disabled={loading || isPrinting}
           >
-            {loading || isPrinting ? <span className="animate-spin mr-2">⏳</span> : '✅ Finalizar e Imprimir'}
+            {loading || isPrinting ? <span className="animate-spin mr-2">⏳</span> : 'Finalizar e Imprimir'}
           </button>
         </div>
       </form>

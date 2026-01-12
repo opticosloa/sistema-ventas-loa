@@ -16,6 +16,7 @@ interface ClientFormProps {
     onInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
     handleSearchClick: () => void;
     loading: boolean;
+    formErrors?: Record<string, string>;
 }
 
 export const ClientForm: React.FC<ClientFormProps> = ({
@@ -23,7 +24,12 @@ export const ClientForm: React.FC<ClientFormProps> = ({
     onInputChange,
     handleSearchClick,
     loading,
+    formErrors = {},
 }) => {
+    const getInputClass = (fieldName: string, baseClass: string = "input") => {
+        return formErrors[fieldName] ? `${baseClass} ring-2 ring-red-500` : baseClass;
+    };
+
     const {
         clienteDNI,
         clienteObraSocial,
@@ -43,7 +49,7 @@ export const ClientForm: React.FC<ClientFormProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div className="bg-opacity-10 border border-blanco rounded-xl p-4">
                     <label className="flex flex-col gap-1">
-                        <span className="text-sm text-blanco">Buscar por DNI</span>
+                        <span className="text-sm text-blanco">Buscar por DNI <span className="text-red-500">*</span></span>
                         <div className="flex gap-2">
                             <input
                                 type="text"
@@ -51,7 +57,7 @@ export const ClientForm: React.FC<ClientFormProps> = ({
                                 placeholder="Ingrese DNI"
                                 value={clienteDNI}
                                 onChange={onInputChange}
-                                className="input flex-1"
+                                className={`flex-1 ${getInputClass('clienteDNI', 'input')}`}
                                 inputMode="numeric"
                             />
 
@@ -98,25 +104,25 @@ export const ClientForm: React.FC<ClientFormProps> = ({
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <label className="flex flex-col gap-1">
-                    <span className="text-sm text-blanco">Nombre</span>
+                    <span className="text-sm text-blanco">Nombre <span className="text-red-500">*</span></span>
                     <input
                         name="clienteName"
                         value={clienteName}
                         onChange={onInputChange}
                         placeholder="Nombre cliente"
-                        className="input"
+                        className={getInputClass('clienteName')}
                         autoComplete="name"
                     />
                 </label>
 
                 <label className="flex flex-col gap-1">
-                    <span className="text-sm text-blanco">Apellido</span>
+                    <span className="text-sm text-blanco">Apellido <span className="text-red-500">*</span></span>
                     <input
                         name="clienteApellido"
                         value={clienteApellido}
                         onChange={onInputChange}
                         placeholder="Apellido cliente"
-                        className="input"
+                        className={getInputClass('clienteApellido')}
                         autoComplete="name"
                     />
                 </label>

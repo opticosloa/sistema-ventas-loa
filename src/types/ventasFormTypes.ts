@@ -13,6 +13,7 @@ export type FormValues = {
   // Doctor
   doctorMatricula: string;
   doctorNombre: string;
+  doctor_id?: string; // UUID
 
   // Lejos (OD / OI)
   lejos_OD_Esf: string;
