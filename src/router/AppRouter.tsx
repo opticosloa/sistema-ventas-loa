@@ -5,7 +5,7 @@ import { LoginPage, NotFoundPage, PagoResultadoPage, UnAuthorized, DevolucionesP
 import { HomePage, EmpleadoHomePage, TallerHomePage } from '../page';
 import { AuthGuard, RoleGuard, TenantGuard } from '../auth/guards';
 import { useAuthStore } from '../hooks';
-import { FormularioDePago, FormularioVenta, FormularioProducto, FormularioCristal } from '../forms';
+import { FormularioDePago, FormularioVenta, FormularioProducto, FormularioCristal, FormularioDeEntregaTicket } from '../forms';
 
 export const AppRouter = () => {
   const { status } = useAuthStore();
@@ -54,6 +54,7 @@ export const AppRouter = () => {
                 <Route path="nueva-venta/pago" element={<FormularioDePago />} />
                 <Route path="clientes/:cliente_id/historial" element={<HistorialPrescripciones />} />
                 <Route path="devoluciones" element={<DevolucionesPage />} />
+                <Route path="entregas" element={<FormularioDeEntregaTicket />} />
 
                 {/* NUEVA RUTA EMPLEADO */}
                 <Route path="cierre-caja" element={<CierreCajaPage />} />

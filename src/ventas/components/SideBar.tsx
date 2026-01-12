@@ -1,12 +1,15 @@
+import { useState } from 'react';
 import { NavLink, useNavigate } from "react-router-dom"; // Cambiamos a NavLink
 import { useAppDispatch, useAppSelector, useUiStore } from "../../hooks";
 import { startLogout } from "../../store";
+import { ProfileEditModal } from "./ProfileEditModal";
 
 export const SideBar = () => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const { isSideBarOpen, toggleSideBar } = useUiStore();
   const { uid, role } = useAppSelector((state: any) => state.auth);
+  const [showProfileModal, setShowProfileModal] = useState(false);
 
   const handlerLogout = async () => {
     if (uid) {
@@ -70,6 +73,23 @@ export const SideBar = () => {
               Configuración de Divisas
             </NavLink>
           )}
+
+          <div className="border-b border-celeste/20 my-2"></div>
+
+          {/* Perfil Usuario (Mobile) */}
+          <button
+            className="w-full text-left py-2 px-4 rounded-lg hover:bg-celeste transition-colors flex items-center gap-2"
+            onClick={() => {
+              setShowProfileModal(true);
+              // Do not close sidebar immediately so user understands context, or maybe close it?
+              // Usually better to keep sidebar or handle via modal overlay.
+              // Let's close sidebar if we want full focus on modal, but modal has high z-index
+              toggleSideBar();
+            }}
+          >
+            Perfil Usuario
+          </button>
+
         </nav>
 
         <div className="mt-auto p-4 border-t border-celeste/30">
@@ -81,6 +101,10 @@ export const SideBar = () => {
           </button>
         </div>
       </div>
+
+      {showProfileModal && (
+        <ProfileEditModal onClose={() => setShowProfileModal(false)} />
+      )}
     </>
   );
 };

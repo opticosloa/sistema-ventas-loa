@@ -3,6 +3,7 @@ import { useDebounce } from '../../hooks/useDebounce';
 import type { Empleado } from '../../types/Empleado';
 import LOAApi from '../../api/LOAApi';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { SecurityPinModal } from './SecurityPinModal';
 
 const ITEMS_PER_PAGE = 25;
 
@@ -68,6 +69,7 @@ export const ListaEmpleados: React.FC = () => {
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Empleado | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [newEmpleado, setNewEmpleado] = useState<Empleado>({
     usuario_id: 0,
@@ -326,6 +328,14 @@ export const ListaEmpleados: React.FC = () => {
 
                   <div className="flex gap-2 mt-3">
                     <button className="btn-primary" onClick={() => console.log("Editar empleado", selected.usuario_id)}>Editar</button>
+                    {(selected.rol === "ADMIN" || selected.rol === "SUPERADMIN") && (
+                      <button
+                        className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-4 py-2 rounded-lg font-medium transition-colors"
+                        onClick={() => setShowPinModal(true)}
+                      >
+                        Config. PIN
+                      </button>
+                    )}
                     <button className="btn-secondary" onClick={() => console.log("Historial", selected.usuario_id)}>Historial</button>
                   </div>
                 </div>
@@ -485,6 +495,19 @@ export const ListaEmpleados: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Security Pin Modal */}
+      {showPinModal && selected && (
+        <SecurityPinModal
+          userId={selected.usuario_id}
+          userName={`${selected.nombre} ${selected.apellido}`}
+          onClose={() => setShowPinModal(false)}
+          onSuccess={() => {
+            setShowPinModal(false);
+            // Optional: show a toast or keep the details modal open
+          }}
+        />
       )}
     </div>
   );
