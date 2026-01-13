@@ -148,8 +148,6 @@ export const FormularioDePago: React.FC = () => {
 
   const metodos: { id: MetodoPago; label: string; icon: string }[] = [
     { id: 'EFECTIVO', label: 'Efectivo', icon: '💵' },
-    { id: 'DEBITO', label: 'Débito', icon: '💳' },
-    { id: 'CREDITO', label: 'Crédito', icon: '💳' },
     { id: 'TRANSFERENCIA', label: 'Transferencia', icon: '🏦' },
     { id: 'MP', label: 'Mercado Pago', icon: '📱' },
   ];
@@ -240,7 +238,7 @@ export const FormularioDePago: React.FC = () => {
         // REFRESH LIST
         if (Array.isArray(backendPagosList)) {
           // Check if we have a NEW confirmed payment
-          const hasNewConfirmed = backendPagosList.some((p: any) =>
+          backendPagosList.some((p: any) =>
             (p.estado === 'APROBADO' || p.estado === 'CONFIRMADO') &&
             !pagos.some(local => local.confirmed && local.monto === parseFloat(p.monto) && local.metodo === p.metodo) // Weak check but sufficient for now
           );
@@ -256,13 +254,16 @@ export const FormularioDePago: React.FC = () => {
           // Re-calculate totals from fresh data
           const freshTotalPaid = mapped.reduce((acc: number, p: any) => acc + (p.confirmed ? p.monto : 0), 0);
 
-          if (freshTotalPaid > totalPagado || hasNewConfirmed) {
-            setPagos(mapped); // Update list
+          const mpPaymentApproved = mapped.find(p => p.metodo === 'MP' && p.confirmed);
+
+          if (mpPaymentApproved && asyncPaymentStatus === 'SHOWING_QR') {
+            // ¡Éxito! Encontramos un pago MP aprobado mientras mostrábamos el QR
+            setPagos(mapped);
             setAsyncPaymentStatus('IDLE');
             setLoading(false);
-            // alert("¡Pago con Mercado Pago confirmado!"); // Optional, maybe intrusive in poll
-          } else {
-            // Just update list to show "Pendiente" status if changed
+            // Opcional: Toast de éxito
+          } else if (freshTotalPaid !== totalPagado) {
+            // Si hubo cualquier cambio en los montos (ej: pago parcial en otra caja), actualizamos la UI
             setPagos(mapped);
           }
         }
@@ -317,30 +318,25 @@ export const FormularioDePago: React.FC = () => {
 
   const handleStartMpFlow = async (type: 'QR' | 'POINT', amount: number, deviceIdParam?: string) => {
     setLoading(true);
+    setPointStatus("");
     try {
       if (type === 'QR') {
-        const { data } = await LOAApi.post('/api/payments/mercadopago/qr', {
-          venta_id: ventaId,
-          monto: amount,
-          title: `Venta #${ventaId}`
+        // Use the new Dynamic QR endpoint
+        const { data } = await LOAApi.post('/api/payments/mercadopago/dynamic', {
+          total: amount,
+          sucursal_id: 'SUCURSAL_DEFAULT' // You might want to make this dynamic later if needed
         });
 
-        if (data.status === 'no_content') {
-          alert("Orden enviada a Mercado Pago. Verifique la pantalla del QR Smart/PosNet.");
-          setAsyncPaymentStatus('WAITING_POINT'); // Reuse waiting status or creating a new one? WAITING_POINT is fine or IDLE but polling?
-          // If it returns 204, it means the QR is on the device. We should poll for payment status.
-          // Let's use WAITING_POINT visual style but maybe change text?
-          // For now, WAITING_POINT is okay, it shows spinner.
-        } else if (data.qr_data) {
-          setQrData(data.qr_data);
+        if (data.success && data.result?.qr_data) {
+          setQrData(data.result.qr_data);
           setAsyncPaymentStatus('SHOWING_QR');
         } else {
-          // Fallback if success but no QR and not no_content (?)
-          alert("Solicitud enviada. Esperando confirmación...");
-          setAsyncPaymentStatus('WAITING_POINT');
+          console.error("Respuesta inesperada QR Dinámico:", data);
+          alert("Error generando QR Dinámico. Intente nuevamente.");
+          setAsyncPaymentStatus('IDLE');
         }
       } else {
-        // Usar el deviceId pasado por parámetro
+        // Point Flow
         if (!deviceIdParam) {
           setLoading(false);
           return alert("Error: Falta ID de dispositivo");
@@ -348,7 +344,7 @@ export const FormularioDePago: React.FC = () => {
         await LOAApi.post('/api/payments/mercadopago/point', {
           venta_id: ventaId,
           monto: amount,
-          device_id: deviceIdParam // Pass the selected device ID
+          device_id: deviceIdParam
         });
         setPointStatus("Enviado a terminal. Espere...");
         setAsyncPaymentStatus('WAITING_POINT');
@@ -356,10 +352,10 @@ export const FormularioDePago: React.FC = () => {
     } catch (e) {
       console.error("MP Start Flow Error:", e);
       alert("Error iniciando pago MP. Intente nuevamente.");
-      // Limpieza de estados
       setAsyncPaymentStatus('IDLE');
-      setLoading(false);
       setQrData(null);
+    } finally {
+      if (type === 'QR') setLoading(false);
     }
   };
 
@@ -555,7 +551,7 @@ export const FormularioDePago: React.FC = () => {
                   : 'bg-gray-700 text-gray-400 cursor-not-allowed'
                   }`}
               >
-                Pagar al Retirar (Requiere Auth)
+                Pagar al Retirar
               </button>
 
               <button
@@ -566,7 +562,7 @@ export const FormularioDePago: React.FC = () => {
                   : 'bg-gray-700 text-gray-400 cursor-not-allowed'
                   }`}
               >
-                {loading ? 'Procesando...' : 'Finalizar Venta'}
+                {loading ? 'Procesando...' : 'Pagar'}
               </button>
             </div>
 
@@ -662,7 +658,11 @@ export const FormularioDePago: React.FC = () => {
                 <div className="p-4 border-2 border-dashed border-gray-300 rounded mb-4">
                   <QRCodeSVG value={qrData} size={256} />
                 </div>
-                <p className="animate-pulse text-blue-600 font-medium">Esperando confirmación...</p>
+                <p className="text-sm text-gray-500 mb-4">Escanea desde la App de Mercado Pago</p>
+                <div className="flex items-center gap-2 animate-pulse text-blue-600 font-medium">
+                  <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                  Esperando confirmación...
+                </div>
               </>
             )}
             {asyncPaymentStatus === 'WAITING_POINT' && (

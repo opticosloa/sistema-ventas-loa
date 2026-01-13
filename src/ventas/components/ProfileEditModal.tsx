@@ -7,7 +7,7 @@ interface ProfileEditModalProps {
 }
 
 export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ onClose }) => {
-    const { uid, nombre, apellido, email, role } = useAuthStore();
+    const { nombre, apellido, email, role } = useAuthStore();
 
     const [formData, setFormData] = useState({
         nombre: nombre || '',
@@ -27,12 +27,13 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ onClose }) =
 
     useEffect(() => {
         const fetchProfile = async () => {
-            if (!uid) {
+            if (!email) {
                 setFetching(false);
                 return;
             }
             try {
-                const { data } = await LOAApi.get(`/api/users/${uid}`);
+                console.log(email);
+                const { data } = await LOAApi.get(`/api/users/profile/${email}`);
                 if (data.success && data.result) {
                     const user = data.result;
                     setFormData(prev => ({
@@ -54,7 +55,7 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ onClose }) =
             }
         };
         fetchProfile();
-    }, [uid]);
+    }, [email]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setFormData({
@@ -68,7 +69,7 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ onClose }) =
         setLoading(true);
 
         try {
-            const { data } = await LOAApi.put(`/api/users/${uid}/profile`, formData);
+            const { data } = await LOAApi.put(`/api/users/profile/${email}`, formData);
 
             if (data.success) {
                 alert('Perfil actualizado correctamente. Los cambios se reflejarán inmediatamente.');
