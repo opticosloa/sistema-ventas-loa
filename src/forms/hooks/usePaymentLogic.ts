@@ -368,7 +368,6 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
     };
 
     const startMpQrFlow = async (amount: number) => {
-        console.log('startMpQrFlow');
         setLoading(true);
         setPointStatus("");
         try {
@@ -400,7 +399,6 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
         setLoading(true);
         setPointStatus("");
         try {
-            console.log('startMpPointFlow');
             if (!deviceId) {
                 setLoading(false);
                 return alert("Error: Falta ID de dispositivo");

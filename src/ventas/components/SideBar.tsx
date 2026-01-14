@@ -90,16 +90,17 @@ export const SideBar = () => {
             Perfil Usuario
           </button>
 
+          <div className="mt-auto pt-4 border-t border-celeste/30">
+            <button
+              className="w-full text-left py-2 px-4 rounded-lg hover:bg-celeste transition-colors flex items-center gap-2 text-red-300 hover:text-red-100 transition-colors"
+              onClick={handlerLogout}
+            >
+              Cerrar Sesión
+            </button>
+          </div>
         </nav>
 
-        <div className="mt-auto p-4 border-t border-celeste/30">
-          <button
-            className="w-full text-left py-2 px-4 text-red-300 hover:text-red-100 transition-colors"
-            onClick={handlerLogout}
-          >
-            Cerrar Sesión
-          </button>
-        </div>
+
       </div>
 
       {showProfileModal && (

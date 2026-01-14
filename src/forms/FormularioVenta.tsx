@@ -720,7 +720,7 @@ export const FormularioVenta: React.FC = () => {
         navigate('/ventas');
       } else {
         // Navigate directly to payment, bypassing auto-print
-        navigate('/pago', { state: { ventaId: ventaId, total: totalVenta } });
+        navigate('pago', { state: { ventaId: ventaId, total: totalVenta } });
       }
 
     } catch (error: any) {
