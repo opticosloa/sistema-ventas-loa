@@ -275,17 +275,22 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
 
                 // REFRESH LIST
                 if (Array.isArray(backendPagosList)) {
+                    const now = new Date();
 
-                    const pagoRechazado = backendPagosList.find((p: any) =>
-                        p.metodo === 'MP' &&
-                        p.estado === 'RECHAZADO' &&
-                        parseFloat(p.monto) === mpAmount // mpAmount es el estado local del monto que intentas cobrar
-                    );
+                    const pagoRechazadoReciente = backendPagosList.find((p: any) => {
+                        if (p.estado !== 'RECHAZADO') return false;
 
-                    if (pagoRechazado && asyncPaymentStatus !== 'IDLE') {
-                        setAsyncPaymentStatus('IDLE'); // Cerramos el modal de espera
+                        const fechaPago = new Date(p.created_at);
+                        const diferenciaSegundos = Math.abs(now.getTime() - fechaPago.getTime()) / 1000;
+
+                        return diferenciaSegundos < 10; // Solo consideramos rechazos de los últimos 10s
+                    });
+
+                    // Si encontramos un rechazo reciente y el modal está abierto, lo cerramos
+                    if (pagoRechazadoReciente && asyncPaymentStatus !== 'IDLE') {
+                        setAsyncPaymentStatus('IDLE');
                         setLoading(false);
-                        alert("❌ El pago fue RECHAZADO por Mercado Pago. Intente con otro medio.");
+                        alert("❌ El pago fue rechazado recientemente. Por favor, intente con otra tarjeta.");
                         return;
                     }
                     // Check if we have a NEW confirmed payment
@@ -305,9 +310,9 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
                     // Re-calculate totals from fresh data
                     const freshTotalPaid = mapped.reduce((acc: number, p: any) => acc + (p.confirmed ? p.monto : 0), 0);
 
-                    const mpPaymentApproved = mapped.find(p => p.metodo === 'MP' && p.confirmed);
+                    const mpPaymentApproved = mapped.find(p => p.metodo.startsWith('MP') && p.confirmed);
 
-                    if (mpPaymentApproved && asyncPaymentStatus === 'SHOWING_QR') {
+                    if (mpPaymentApproved && (asyncPaymentStatus === 'SHOWING_QR' || asyncPaymentStatus === 'WAITING_POINT')) {
                         // ¡Éxito! Encontramos un pago MP aprobado mientras mostrábamos el QR
                         setPagos(mapped);
                         setAsyncPaymentStatus('IDLE');
