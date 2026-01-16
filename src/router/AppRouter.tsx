@@ -2,7 +2,10 @@ import { Routes, Route } from 'react-router-dom';
 import { Navbar, ConsultaStock, ConsultaCliente, TicketList, TicketsHistorial, Estadisticas, ListaEmpleados, Home, HistorialPrescripciones, ListaTicketsTaller, ConfiguracionPage, CierreCajaPage } from '../ventas/components';
 import { LoginPage, NotFoundPage, PagoResultadoPage, UnAuthorized, DevolucionesPage } from '../ventas/page';
 
-import { HomePage, EmpleadoHomePage, TallerHomePage } from '../page';
+import { HomePage, EmpleadoHomePage, TallerHomePage, AdminObrasSociales } from '../page';
+import { AdminLiquidaciones } from '../page/admin/liquidaciones/AdminLiquidaciones';
+import { NuevaLiquidacion } from '../page/admin/liquidaciones/NuevaLiquidacion';
+import { DetalleLiquidacion } from '../page/admin/liquidaciones/DetalleLiquidacion';
 import { AuthGuard, RoleGuard, TenantGuard } from '../auth/guards';
 import { useAuthStore } from '../hooks';
 import { FormularioDePago, FormularioVenta, FormularioProducto, FormularioCristal, FormularioDeEntregaTicket } from '../forms';
@@ -37,7 +40,12 @@ export const AppRouter = () => {
 
                 {/* NUEVAS RUTAS ADMIN */}
                 <Route path="configuracion" element={<ConfiguracionPage />} />
+                <Route path="configuracion" element={<ConfiguracionPage />} />
                 <Route path="cierre-caja" element={<CierreCajaPage />} />
+                <Route path="obras-sociales" element={<AdminObrasSociales />} />
+                <Route path="liquidaciones" element={<AdminLiquidaciones />} />
+                <Route path="liquidaciones/nueva" element={<NuevaLiquidacion />} />
+                <Route path="liquidaciones/:id" element={<DetalleLiquidacion />} />
 
                 <Route element={<RoleGuard allowedRoles={['SUPERADMIN']} />}>
                   <Route path="productos/nuevo" element={<FormularioProducto />} />

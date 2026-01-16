@@ -1,4 +1,4 @@
-export type PaymentMethod = 'MP' | 'EFECTIVO' | 'DEBITO' | 'CREDITO' | 'TRANSFERENCIA';
+export type PaymentMethod = 'MP' | 'EFECTIVO' | 'DEBITO' | 'CREDITO' | 'TRANSFERENCIA' | 'OBRA_SOCIAL';
 export type MetodoPago = PaymentMethod;
 
 export type PaymentStatus = 'PENDIENTE' | 'APROBADO' | 'RECHAZADO';

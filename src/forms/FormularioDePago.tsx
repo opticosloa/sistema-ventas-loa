@@ -46,7 +46,13 @@ export const FormularioDePago: React.FC = () => {
     asyncPaymentStatus,
     qrData,
     pointStatus,
-    setAsyncPaymentStatus
+    setAsyncPaymentStatus,
+    obrasSociales,
+    selectedObraSocialId,
+    setSelectedObraSocialId,
+    nroOrden,
+    setNroOrden,
+    handleCoverInsurance
   } = usePaymentLogic();
 
   return (
@@ -97,6 +103,12 @@ export const FormularioDePago: React.FC = () => {
               setAmountInput={setAmountInput}
               handleAddPayment={handleAddPayment}
               currentTotal={currentTotal}
+              obrasSociales={obrasSociales}
+              selectedObraSocialId={selectedObraSocialId}
+              setSelectedObraSocialId={setSelectedObraSocialId}
+              nroOrden={nroOrden}
+              setNroOrden={setNroOrden}
+              onCoverInsurance={handleCoverInsurance}
             />
 
             <PaymentActionButtons

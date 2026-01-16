@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import LOAApi from '../../api/LOAApi';
 import type { MetodoPago, PagoParcial } from '../../types/Pago';
+import type { ObraSocial } from '../../types/ObrasSociales';
 import type { CartItem } from '../components/SalesItemsList';
 
 export interface UsePaymentLogicReturn {
@@ -54,6 +55,14 @@ export interface UsePaymentLogicReturn {
     qrData: string | null;
     pointStatus: string;
     setAsyncPaymentStatus: (status: 'IDLE' | 'WAITING_POINT' | 'SHOWING_QR') => void;
+
+    // Obras Sociales
+    obrasSociales: ObraSocial[];
+    selectedObraSocialId: number | '';
+    setSelectedObraSocialId: (id: number | '') => void;
+    nroOrden: string;
+    setNroOrden: (val: string) => void;
+    handleCoverInsurance: () => void;
 }
 
 export const usePaymentLogic = (): UsePaymentLogicReturn => {
@@ -94,6 +103,22 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
         fetchDevices();
     }, []);
 
+    // Fetch Obras Sociales
+    const [obrasSociales, setObrasSociales] = useState<ObraSocial[]>([]);
+    useEffect(() => {
+        const fetchOS = async () => {
+            try {
+                const { data } = await LOAApi.get('/api/obras-sociales');
+                // Filter active ones
+                const active = (data.result || []).filter((o: ObraSocial) => o.activo);
+                setObrasSociales(active);
+            } catch (error) {
+                console.error("Error fetching Obras Sociales", error);
+            }
+        };
+        fetchOS();
+    }, []);
+
     // Sync with location state on mount
     useEffect(() => {
         const state = (location.state as any);
@@ -115,9 +140,31 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
         try {
             const { data } = await LOAApi.get(`/api/sales/${id}`);
             if (data.success && data.result) {
-                const sale = Array.isArray(data.result) ? data.result[0] : data.result;
-                if (sale.total) setCurrentTotal(parseFloat(sale.total));
-                if (sale.items) setSaleItems(sale.items || []);
+                const rows = data.result.rows || (Array.isArray(data.result) ? data.result : []);
+                const sale = rows[0];
+
+                if (sale) {
+                    if (sale.total) setCurrentTotal(parseFloat(sale.total));
+
+                    if (sale.items && Array.isArray(sale.items)) {
+                        // --- MAPEO DE DATOS AQUÍ ---
+                        const mappedItems = sale.items.map((item: any) => ({
+                            producto: {
+                                producto_id: item.producto_id,
+                                nombre: item.producto_nombre, // Coincide con el nuevo nombre del SP
+                                precio_venta: item.precio_unitario,
+                                precio_usd: item.precio_usd || 0,
+                            },
+                            cantidad: Number(item.cantidad),
+                            subtotal: Number(item.subtotal)
+                        }));
+
+                        setSaleItems(mappedItems);
+                    } else {
+                        console.warn("No se encontraron items o el SP no devolvió la columna 'items'");
+                        setSaleItems([]);
+                    }
+                }
             }
         } catch (error) {
             console.error("Error fetching sale details", error);
@@ -194,6 +241,10 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
     // Form State for new payment
     const [selectedMethod, setSelectedMethod] = useState<MetodoPago | ''>('');
     const [amountInput, setAmountInput] = useState<string>('');
+
+    // Form State for Obras Sociales
+    const [selectedObraSocialId, setSelectedObraSocialId] = useState<number | ''>('');
+    const [nroOrden, setNroOrden] = useState<string>('');
 
     // Calculations
     // Solo sumamos los confirmados para el "Pagado" real
@@ -424,6 +475,34 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
         }
     };
 
+    const handleCoverInsurance = async () => {
+        if (!ventaId || !selectedObraSocialId || !nroOrden) {
+            alert("Faltan datos para la cobertura");
+            return;
+        }
+        setLoading(true);
+        try {
+            const { data } = await LOAApi.post('/api/sales/cover-insurance', {
+                venta_id: ventaId,
+                obra_social_id: selectedObraSocialId,
+                nro_orden: nroOrden
+            });
+
+            if (data.success) {
+                alert(`Cobertura aplicada por $${data.covered_amount}`);
+                // Refresh payments
+                fetchExistingPayments(ventaId);
+                // Reset OS fields? Maybe keep them displayed contextually, but good to reset logic.
+                // We don't reset method because user might want to see what happened.
+            }
+        } catch (error: any) {
+            console.error("Error covering insurance:", error);
+            alert(error.response?.data?.error || "Error aplicando cobertura");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleSupervisorSuccess = async (supervisorName: string) => {
         try {
             setLoading(true);
@@ -452,7 +531,7 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
     // Transform saleItems for display
     const displayItems: CartItem[] = saleItems.map(item => ({
         producto: {
-            nombre: item.producto_nombre || item.producto?.nombre || 'Producto',
+            nombre: item.producto_nombre || item.producto?.nombre || item.nombre || 'Producto',
             ...item.producto // Keep other props if available
         } as any,
         cantidad: Number(item.cantidad),
@@ -492,6 +571,13 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
         asyncPaymentStatus,
         qrData,
         pointStatus,
-        setAsyncPaymentStatus
+        setAsyncPaymentStatus,
+        // OS
+        obrasSociales,
+        selectedObraSocialId,
+        setSelectedObraSocialId,
+        nroOrden,
+        setNroOrden,
+        handleCoverInsurance
     };
 };

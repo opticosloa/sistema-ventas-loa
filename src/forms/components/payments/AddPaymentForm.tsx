@@ -1,5 +1,6 @@
 import React from 'react';
 import type { MetodoPago } from '../../../types/Pago';
+import type { ObraSocial } from '../../../types/ObrasSociales';
 
 interface AddPaymentFormProps {
     selectedMethod: MetodoPago | '';
@@ -8,12 +9,20 @@ interface AddPaymentFormProps {
     setAmountInput: (val: string) => void;
     handleAddPayment: () => void;
     currentTotal: number;
+    // Props for Obra Social
+    obrasSociales?: ObraSocial[];
+    selectedObraSocialId?: number | '';
+    setSelectedObraSocialId?: (id: number | '') => void;
+    nroOrden?: string;
+    setNroOrden?: (val: string) => void;
+    onCoverInsurance?: () => void;
 }
 
 const metodos: { id: MetodoPago; label: string; icon: string }[] = [
     { id: 'EFECTIVO', label: 'Efectivo', icon: '💵' },
     { id: 'TRANSFERENCIA', label: 'Transferencia', icon: '🏦' },
     { id: 'MP', label: 'Mercado Pago', icon: '📱' },
+    { id: 'OBRA_SOCIAL', label: 'Obra Social', icon: '🚑' },
 ];
 
 export const AddPaymentForm: React.FC<AddPaymentFormProps> = ({
@@ -23,7 +32,14 @@ export const AddPaymentForm: React.FC<AddPaymentFormProps> = ({
     setAmountInput,
     handleAddPayment,
     currentTotal,
+    obrasSociales = [],
+    selectedObraSocialId = '',
+    setSelectedObraSocialId,
+    nroOrden = '',
+    setNroOrden,
+    onCoverInsurance
 }) => {
+    const selectedOS = obrasSociales.find(os => os.obra_social_id === Number(selectedObraSocialId));
     return (
         <>
             <h3 className="text-lg font-medium mb-4">Agregar Método</h3>
@@ -38,8 +54,8 @@ export const AddPaymentForm: React.FC<AddPaymentFormProps> = ({
                             // Parent handles the amountInput reset if needed, or we just set method.
                         }}
                         className={`p-3 rounded-lg border flex flex-col items-center justify-center gap-1 transition-all ${selectedMethod === m.id
-                                ? 'bg-celeste text-negro border-celeste scale-105 shadow-md'
-                                : 'bg-transparent border-gray-600 hover:border-celeste hover:text-celeste'
+                            ? 'bg-celeste text-negro border-celeste scale-105 shadow-md'
+                            : 'bg-transparent border-gray-600 hover:border-celeste hover:text-celeste'
                             }`}
                     >
                         <span className="text-2xl">{m.icon}</span>
@@ -47,6 +63,72 @@ export const AddPaymentForm: React.FC<AddPaymentFormProps> = ({
                     </button>
                 ))}
             </div>
+
+            {selectedMethod === 'OBRA_SOCIAL' && (
+                <div className="mb-6 p-4 bg-gray-700/50 rounded-lg border border-gray-600">
+                    <div className="mb-4">
+                        <label className="block text-sm text-gray-300 mb-1">Seleccionar Obra Social</label>
+                        <select
+                            value={selectedObraSocialId}
+                            onChange={(e) => setSelectedObraSocialId && setSelectedObraSocialId(Number(e.target.value) || '')}
+                            className="input w-full"
+                        >
+                            <option value="">Seleccione...</option>
+                            {obrasSociales.map(os => (
+                                <option key={os.obra_social_id} value={os.obra_social_id}>
+                                    {os.nombre}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {selectedOS && (
+                        <div className="mb-4 text-sm text-gray-300">
+                            {selectedOS.instrucciones && (
+                                <div className="mb-2 p-2 bg-blue-900/30 border border-blue-800 rounded">
+                                    <strong>Instrucciones:</strong> {selectedOS.instrucciones}
+                                </div>
+                            )}
+                            {selectedOS.sitio_web && (
+                                <a
+                                    href={selectedOS.sitio_web}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="block w-full text-center py-2 bg-gray-600 hover:bg-gray-500 rounded text-white font-medium mb-3"
+                                >
+                                    🔗 Verificar Orden
+                                </a>
+                            )}
+                        </div>
+                    )}
+
+                    <div className="mb-4">
+                        <label className="block text-sm text-gray-300 mb-1">Nro. de Orden / Autorización *</label>
+                        <input
+                            type="text"
+                            value={nroOrden}
+                            onChange={(e) => setNroOrden && setNroOrden(e.target.value)}
+                            className="input w-full"
+                            placeholder="Ingrese código..."
+                        />
+                    </div>
+
+                    {onCoverInsurance && (
+                        <button
+                            type="button"
+                            onClick={onCoverInsurance}
+                            disabled={!selectedObraSocialId || !nroOrden}
+                            className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 mb-2"
+                        >
+                            ✨ Cubrir Cristales y Marcos
+                        </button>
+                    )}
+
+                    <p className="text-xs text-gray-400 text-center">
+                        Calcula automáticamente el total de items ópticos.
+                    </p>
+                </div>
+            )}
 
             <div className="mb-6">
                 <label className="block text-sm text-gray-400 mb-1">Monto</label>

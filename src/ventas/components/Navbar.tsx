@@ -90,6 +90,12 @@ export const Navbar = () => {
                   >
                     Empleados
                   </Link>
+                  <Link
+                    to="/admin/liquidaciones"
+                    className="text-white font-medium hover:text-gray-200 transition-colors px-3 py-2 rounded-md hover:bg-white/10"
+                  >
+                    Liquidaciones
+                  </Link>
                 </div>
               )
             }
