@@ -7,6 +7,7 @@ export * from './Dashboard';
 export * from './DashboardTaller';
 export * from './Estadisticas';
 export * from './Footer';
+export * from './HistorialPrescripciones';
 export * from './Home';
 export * from './ListaEmpleados';
 export * from './Logo';

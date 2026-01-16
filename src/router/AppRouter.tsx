@@ -1,5 +1,5 @@
 import { Routes, Route } from 'react-router-dom';
-import { Navbar, ConsultaStock, ConsultaCliente, TicketList, TicketsHistorial, Estadisticas, ListaEmpleados, Home, HistorialPrescripciones, ListaTicketsTaller, ConfiguracionPage, CierreCajaPage } from '../ventas/components';
+import { Navbar, ConsultaStock, ConsultaCliente, TicketList, TicketsHistorial, Estadisticas, ListaEmpleados, Home, ListaTicketsTaller, ConfiguracionPage, CierreCajaPage } from '../ventas/components';
 import { LoginPage, NotFoundPage, PagoResultadoPage, UnAuthorized, DevolucionesPage } from '../ventas/page';
 
 import { HomePage, EmpleadoHomePage, TallerHomePage, AdminObrasSociales } from '../page';
@@ -61,7 +61,7 @@ export const AppRouter = () => {
                 <Route path="stock" element={<ConsultaStock />} />
                 <Route path="clientes" element={<ConsultaCliente />} />
                 <Route path="nueva-venta/pago" element={<FormularioDePago />} />
-                <Route path="clientes/:cliente_id/historial" element={<HistorialPrescripciones />} />
+                {/* <Route path="clientes/:cliente_id/historial" element={<HistorialPrescripciones />} /> */}
                 <Route path="devoluciones" element={<DevolucionesPage />} />
                 <Route path="entregas" element={<FormularioDeEntregaTicket />} />
 
