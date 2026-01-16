@@ -5,6 +5,7 @@ import type { Cliente } from '../../types/Cliente';
 import LOAApi from '../../api/LOAApi';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { RefreshButton } from '../../components/ui/RefreshButton';
+import { HistorialPrescripciones } from './HistorialPrescripciones';
 
 const ITEMS_PER_PAGE = 25;
 
@@ -24,6 +25,9 @@ export const ConsultaCliente: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editData, setEditData] = useState<Partial<Cliente>>({});
 
+  // History Modal State
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+
   // Consulta de clientes
   const { data: clientes = [], isLoading, isSuccess } = useQuery({
     queryKey: ['clients'],
@@ -33,6 +37,15 @@ export const ConsultaCliente: React.FC = () => {
       return Array.isArray(listaClientes) ? listaClientes : [];
     }
   });
+
+  const formatGraduacion = (data: any) => {
+    if (!data || (!data.OD && !data.OI)) return "Sin graduación";
+
+    const od = data.OD ? `OD: ${data.OD.esfera || '0'} / ${data.OD.cilindro || '0'} x ${data.OD.eje || '0'}°` : '';
+    const oi = data.OI ? `OI: ${data.OI.esfera || '0'} / ${data.OI.cilindro || '0'} x ${data.OI.eje || '0'}°` : '';
+
+    return `${od} ${oi}`.trim();
+  };
 
   // Consulta de prescripciones del cliente seleccionado
   const { data: prescripciones = [], isLoading: isLoadingPrescripciones } = useQuery({
@@ -72,11 +85,12 @@ export const ConsultaCliente: React.FC = () => {
 
   // Abrir modal y bloquear scroll; focus en close button
   useEffect(() => {
-    if (showModal || showEditModal) {
+    if (showModal || showEditModal || showHistoryModal) {
       document.body.style.overflow = "hidden";
       const onKey = (e: KeyboardEvent) => {
         if (e.key === "Escape") {
-          if (showEditModal) setShowEditModal(false);
+          if (showHistoryModal) setShowHistoryModal(false);
+          else if (showEditModal) setShowEditModal(false);
           else closeModal();
         }
       };
@@ -86,7 +100,7 @@ export const ConsultaCliente: React.FC = () => {
         document.body.style.overflow = "";
       };
     }
-  }, [showModal, showEditModal]);
+  }, [showModal, showEditModal, showHistoryModal]);
 
   const openModal = (c: Cliente) => {
     setSelected(c);
@@ -344,7 +358,7 @@ export const ConsultaCliente: React.FC = () => {
                     </button>
                     <button
                       className="btn-secondary w-full justify-center"
-                      onClick={() => navigate(`/clientes/${selected.cliente_id}/historial`)}
+                      onClick={() => setShowHistoryModal(true)}
                     >
                       Historial Completo
                     </button>
@@ -354,9 +368,12 @@ export const ConsultaCliente: React.FC = () => {
 
               {/* Columna Derecha: Historial de Prescripciones */}
               <div className="border-t lg:border-t-0 lg:border-l lg:pl-8 pt-6 lg:pt-0">
-                <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                  <span>Últimas Prescripciones</span>
-                  {isLoadingPrescripciones && <span className="w-3 h-3 rounded-full border-2 border-blue-500 border-t-transparent animate-spin"></span>}
+                <h4 className="font-semibold text-gray-800 mb-3 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span>Últimas 5 Prescripciones</span>
+                    {isLoadingPrescripciones && <span className="w-3 h-3 rounded-full border-2 border-blue-500 border-t-transparent animate-spin"></span>}
+                  </div>
+                  <button onClick={() => setShowHistoryModal(true)} className="text-xs text-azul hover:underline">Ver Todas</button>
                 </h4>
 
                 <div className="space-y-3">
@@ -366,22 +383,40 @@ export const ConsultaCliente: React.FC = () => {
                     </div>
                   )}
 
-                  {prescripciones.slice(0, 5).map((pres: any) => (
-                    <div key={pres.prescripcion_id} className="p-3 border rounded-lg bg-white shadow-sm hover:shadow-md transition-shadow text-sm">
-                      <div className="flex justify-between items-start mb-1">
-                        <span className="font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded text-xs">{new Date(pres.fecha).toLocaleDateString()}</span>
-                        <span className="text-xs text-gray-500 uppercase tracking-wide">Dr. {pres.doctor_apellido || 'S/D'}</span>
+                  {prescripciones.slice(0, 5).map((p: any) => (
+                    <div key={p.prescripcion_id} className="...">
+                      <div className="flex justify-between items-start">
+                        <span className="badge-fecha">{new Date(p.created_at).toLocaleDateString()}</span>
+                        <span className="text-xs text-gray-500 font-bold uppercase">Dr. {p.doctor_nombre || 'S/D'}</span>
                       </div>
-                      <div className="grid grid-cols-2 gap-2 mt-2">
+
+                      <div className="grid grid-cols-2 gap-4 mt-3">
                         <div>
-                          <div className="text-[10px] uppercase text-gray-400 font-bold">Lejos</div>
-                          <div className="truncate text-xs font-mono bg-gray-50 p-1 rounded font-bold">{pres.lejos || '-'}</div>
+                          <p className="text-[10px] font-bold text-gray-400 uppercase">Lejos</p>
+                          {/* ACCESO CORRECTO A LOS DATOS ANIDADOS */}
+                          <p className="text-sm text-gray-700">
+                            {p.lejos?.OD?.esfera || p.lejos?.OI?.esfera
+                              ? formatGraduacion(p.lejos)
+                              : '-'}
+                          </p>
                         </div>
                         <div>
-                          <div className="text-[10px] uppercase text-gray-400 font-bold">Cerca</div>
-                          <div className="truncate text-xs font-mono bg-gray-50 p-1 rounded font-bold">{pres.cerca || '-'}</div>
+                          <p className="text-[10px] font-bold text-gray-400 uppercase">Cerca</p>
+                          <p className="text-sm text-gray-700">
+                            {p.cerca?.OD?.esfera || p.cerca?.OI?.esfera
+                              ? formatGraduacion(p.cerca)
+                              : '-'}
+                          </p>
                         </div>
                       </div>
+
+                      {/* Mostrar Multifocal si existe */}
+                      {p.multifocal?.tipo && (
+                        <div className="mt-2 pt-2 border-t border-gray-100">
+                          <p className="text-[10px] font-bold text-cyan-600 uppercase">Multifocal</p>
+                          <p className="text-xs text-gray-600">{p.multifocal.tipo} - Alt: {p.multifocal.altura}</p>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -389,6 +424,16 @@ export const ConsultaCliente: React.FC = () => {
             </section>
           </div>
         </div>
+      )}
+
+      {/* Modal Historial Completo */}
+      {showHistoryModal && selected && (
+        <HistorialPrescripciones
+          cliente={selected}
+          prescripciones={prescripciones}
+          onClose={() => setShowHistoryModal(false)}
+          formatGraduacion={formatGraduacion}
+        />
       )}
 
       {/* Modal Editar */}

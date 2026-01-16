@@ -1,123 +1,85 @@
 import React from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import LOAApi from '../../api/LOAApi';
+import type { Cliente } from '../../types/Cliente';
 
-export const HistorialPrescripciones: React.FC = () => {
-    const { cliente_id } = useParams<{ cliente_id: string }>();
-    const navigate = useNavigate();
+interface HistorialPrescripcionesProps {
+    cliente: Cliente;
+    prescripciones: any[];
+    onClose: () => void;
+    formatGraduacion: (data: any) => string;
+}
 
-    // Fetch client details
-    const { data: cliente, isLoading: isLoadingCliente } = useQuery({
-        queryKey: ['client', cliente_id],
-        queryFn: async () => {
-            const { data } = await LOAApi.get<{ result: any }>(`/api/clients`);
-            const rows = data.result?.rows || data.result;
-            return rows.find((c: any) => c.cliente_id.toString() === cliente_id);
-        },
-        enabled: !!cliente_id
-    });
-
-    // Fetch prescriptions
-    const { data: prescripciones = [], isLoading: isLoadingPrescripciones } = useQuery({
-        queryKey: ['prescriptions', cliente_id],
-        queryFn: async () => {
-            if (!cliente_id) return [];
-            const { data } = await LOAApi.get<{ success: boolean; result: any }>(`/api/prescriptions/client/${cliente_id}`);
-            return data.result?.rows || data.result || [];
-        },
-        enabled: !!cliente_id
-    });
-
-    if (isLoadingCliente || isLoadingPrescripciones) {
-        return (
-            <div className="flex justify-center items-center h-screen bg-gray-50">
-                <div className="flex flex-col items-center">
-                    <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-                    <p className="text-gray-500">Cargando historial...</p>
-                </div>
-            </div>
-        );
-    }
-
-    if (!cliente) {
-        return (
-            <div className="p-8 text-center">
-                <h2 className="text-xl font-bold text-red-600">Cliente no encontrado</h2>
-                <button onClick={() => navigate(-1)} className="mt-4 btn-primary">Volver</button>
-            </div>
-        )
-    }
-
+export const HistorialPrescripciones: React.FC<HistorialPrescripcionesProps> = ({ cliente, prescripciones, onClose, formatGraduacion }) => {
     return (
-        <div className="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
-            <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                    <button onClick={() => navigate(-1)} className="text-sm text-gray-500 hover:text-gray-700 mb-2 flex items-center gap-1">
-                        ← Volver
-                    </button>
-                    <h1 className="text-3xl font-bold text-gray-900">Historial de Prescripciones</h1>
-                    <p className="text-gray-600 mt-1">
-                        Cliente: <span className="font-semibold">{cliente.nombre}</span> | DNI: {cliente.dni}
-                    </p>
-                </div>
-                <div>
-                    <button
-                        className="btn-primary"
-                        onClick={() => navigate('/empleado/nueva-venta', { state: { client: cliente } })}
-                    >
-                        + Nuevo Pedido
-                    </button>
-                </div>
-            </div>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div className="fixed inset-0 bg-black/60" onClick={onClose} />
+            <div className="relative bg-white rounded-lg shadow-xl w-full max-w-4xl p-6 z-[70] overflow-y-auto max-h-[90vh] flex flex-col">
 
-            <div className="bg-white rounded-lg shadow overflow-hidden">
-                {prescripciones.length === 0 ? (
-                    <div className="p-10 text-center text-gray-500">
-                        No hay prescripciones registradas para este cliente.
+                <header className="flex justify-between items-center mb-6 border-b pb-4">
+                    <div>
+                        <h3 className="text-2xl font-bold text-gray-800">Historial Completo de Prescripciones</h3>
+                        <p className="text-sm text-gray-500">Cliente: <span className="font-semibold text-gray-700">{cliente.nombre}</span></p>
                     </div>
-                ) : (
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Doctor</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Detalles (Lejos/Cerca)</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Observaciones</th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                                {prescripciones.map((p: any) => (
-                                    <tr key={p.prescripcion_id} className="hover:bg-gray-50">
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                            {new Date(p.fecha).toLocaleDateString()}
-                                        </td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                                            {p.doctor_apellido ? `Dr. ${p.doctor_apellido}` : 'S/D'}
-                                        </td>
-                                        <td className="px-6 py-4 text-sm text-gray-700">
-                                            <div className="grid grid-cols-2 gap-x-4 gap-y-1 max-w-xs">
-                                                <div className="font-semibold text-xs text-gray-500 uppercase">Lejos</div>
-                                                <div className="font-semibold text-xs text-gray-500 uppercase">Cerca</div>
-                                                <div className="font-mono bg-gray-50 px-1 rounded truncate">{p.lejos || '-'}</div>
-                                                <div className="font-mono bg-gray-50 px-1 rounded truncate">{p.cerca || '-'}</div>
-                                            </div>
-                                            {(p.cilindro_lejos || p.cilindro_cerca) && (
-                                                <div className="mt-1 text-xs text-gray-500">
-                                                    Cil: {p.cilindro_lejos || '-'} / {p.cilindro_cerca || '-'}
-                                                </div>
-                                            )}
-                                        </td>
-                                        <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
-                                            {p.observaciones || '-'}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
+                    <button aria-label="Cerrar" onClick={onClose}
+                        className="text-gray-500 hover:text-black hover:bg-gray-100 rounded-full w-8 h-8 flex items-center justify-center transition-colors text-xl">✕</button>
+                </header>
+
+                <div className="flex-1 overflow-y-auto pr-2">
+                    {prescripciones.length === 0 ? (
+                        <div className="text-center py-10 text-gray-500 italic">No hay historial de prescripciones.</div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {prescripciones.map((p: any) => (
+                                <div key={p.prescripcion_id} className="border rounded-xl p-4 bg-gray-50 hover:bg-white hover:shadow-md transition-all border-gray-200">
+                                    <div className="flex justify-between items-start mb-3 border-b pb-2 border-gray-200">
+                                        <span className="font-bold text-blue-700 bg-blue-100 px-2 py-0.5 rounded text-xs">
+                                            {new Date(p.created_at).toLocaleDateString()}
+                                        </span>
+                                        <span className="text-xs text-gray-500 font-bold uppercase">Dr. {p.doctor_nombre || 'S/D'}</span>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Lejos</p>
+                                            <p className="text-sm text-gray-700 font-medium bg-white p-1 rounded border border-gray-100">
+                                                {p.lejos?.OD?.esfera || p.lejos?.OI?.esfera
+                                                    ? formatGraduacion(p.lejos)
+                                                    : '-'}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">Cerca</p>
+                                            <p className="text-sm text-gray-700 font-medium bg-white p-1 rounded border border-gray-100">
+                                                {p.cerca?.OD?.esfera || p.cerca?.OI?.esfera
+                                                    ? formatGraduacion(p.cerca)
+                                                    : '-'}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {p.multifocal?.tipo && (
+                                        <div className="mt-3 pt-2 border-t border-gray-200 flex justify-between items-center text-xs">
+                                            <span className="font-bold text-cyan-700 uppercase">Multifocal</span>
+                                            <span className="text-gray-600 bg-cyan-50 px-2 py-0.5 rounded border border-cyan-100">
+                                                {p.multifocal.tipo} <span className="mx-1 text-gray-300">|</span> Alt: {p.multifocal.altura}
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    {p.observaciones && (
+                                        <div className="mt-3 text-xs text-gray-500 italic border-t pt-2">
+                                            Obs: {p.observaciones}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div className="mt-6 flex justify-end">
+                    <button className="btn-primary px-6 py-2" onClick={onClose}>Cerrar Historial</button>
+                </div>
+
             </div>
         </div>
     );

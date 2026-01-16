@@ -1,120 +1,148 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { ScanBarcode, Loader2 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { X, Camera } from 'lucide-react';
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { parseDNIArgentina } from '../../helpers';
 import type { Cliente } from '../../types/Cliente';
 
 interface BotonEscanearDNIProps {
     onScanComplete: (cliente: Partial<Cliente>) => void;
-    className?: string; // Para permitir personalización de estilos desde el padre
+    className?: string;
 }
 
-export const BotonEscanearDNI: React.FC<BotonEscanearDNIProps> = ({ onScanComplete }) => {
+export const BotonEscanearDNI: React.FC<BotonEscanearDNIProps> = ({ onScanComplete, className }) => {
     const [isScanning, setIsScanning] = useState(false);
-    const [inputValue, setInputValue] = useState('');
-    const inputRef = useRef<HTMLInputElement>(null);
+    const [error, setError] = useState<string | null>(null);
+    const scannerRef = useRef<Html5Qrcode | null>(null);
+    const regionId = 'reader-dni'; // ID único para el contenedor del scanner
 
-    // Efecto para mantener el foco en el input invisible cuando se está escaneando
     useEffect(() => {
-        if (isScanning && inputRef.current) {
-            inputRef.current.focus();
-        }
-    }, [isScanning]);
-
-    const handleStartScan = () => {
-        setIsScanning(true);
-        setInputValue('');
-        if (inputRef.current) {
-            inputRef.current.focus();
-        }
-    };
-
-    const handleBlur = () => {
-        // Opcional: Si pierde el foco, podríamos cancelar el escaneo o intentar recuperarlo.
-        // Por simplicidad, si el usuario hace clic afuera, cancelamos el modo de espera.
-        // Pero damos un pequeño timeout para no cancelar si solo es un parpadeo de foco
-        setTimeout(() => {
-            if (document.activeElement !== inputRef.current) {
-                // setIsScanning(false); // Comentado: A veces es molesto si se pierde foco accidentalmente.
-                // Dejamos que el usuario cancele explícitamente o escanee.
+        // Limpiar scanner al desmontar si está activo
+        return () => {
+            if (scannerRef.current) {
+                if (scannerRef.current.isScanning) {
+                    scannerRef.current.stop().catch(console.error);
+                }
+                scannerRef.current.clear();
             }
-        }, 200);
+        };
+    }, []);
+
+    const startScanning = async () => {
+        setIsScanning(true);
+        setError(null);
+
+        // Esperar a que el DOM se actualice y el div 'reader' exista
+        setTimeout(async () => {
+            try {
+                // Configuraciones del scanner
+                const formatsToSupport = [Html5QrcodeSupportedFormats.PDF_417];
+                const config = {
+                    fps: 10,
+                    qrbox: { width: 300, height: 150 }, // Caja rectangular para DNI
+                    aspectRatio: 1.0,
+                    formatsToSupport: formatsToSupport
+                };
+
+                scannerRef.current = new Html5Qrcode(regionId);
+
+                await scannerRef.current.start(
+                    { facingMode: "environment" }, // Preferir cámara trasera
+                    config,
+                    (decodedText) => {
+                        // Success callback
+                        handleScanSuccess(decodedText);
+                    },
+                    (errorMessage) => {
+                        // Error callback (scanning failure per frame is common, ignore unless critical)
+                        // console.log(errorMessage); 
+                    }
+                );
+
+            } catch (err: any) {
+                console.error("Error iniciando cámara:", err);
+                setError("No se pudo acceder a la cámara. Verifique permisos.");
+                setIsScanning(false);
+            }
+        }, 100);
     };
 
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === 'Enter') {
-            // El escáner suele enviar Enter al final
-            processScan(inputValue);
-            setIsScanning(false);
-            setInputValue(''); // Limpiar para la próxima
-        } else if (e.key === 'Escape') {
-            setIsScanning(false);
-            setInputValue('');
+    const stopScanning = async () => {
+        if (scannerRef.current && scannerRef.current.isScanning) {
+            try {
+                await scannerRef.current.stop();
+                scannerRef.current.clear();
+            } catch (err) {
+                console.error("Error deteniendo scanner:", err);
+            }
         }
+        setIsScanning(false);
     };
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setInputValue(e.target.value);
-    };
-
-    const processScan = (rawData: string) => {
+    const handleScanSuccess = async (decodedText: string) => {
+        await stopScanning();
         try {
-            const data = parseDNIArgentina(rawData);
-
-            // Adaptar los datos parseados al tipo Cliente (parcial)
+            const data = parseDNIArgentina(decodedText);
             const clienteEscaneado: Partial<Cliente> = {
                 nombre: data.nombre,
                 apellido: data.apellido,
                 dni: data.dni,
-                // Sexo no está explícitamente en la interfaz Cliente, pero podría ser útil si se agrega
-                // sexo: data.sexo, 
                 fecha_nacimiento: data.fechaNacimiento,
+                // sexo: data.sexo 
             };
-
             onScanComplete(clienteEscaneado);
-
-        } catch (error: any) {
-            console.error("Error procesando DNI:", error);
-            alert(error.message || "Error al leer el DNI. Intente nuevamente.");
+        } catch (err: any) {
+            console.error("Error parseando DNI:", err);
+            // Mostrar error pero no bloquear permanentemente, quizás un toast sería mejor
+            alert("Error leyendo datos del DNI: " + (err.message || "Formato inválido"));
         }
     };
 
     return (
-        <div className={'relative inline-block'}>
+        <div className={`relative ${className || ''}`}>
             {!isScanning ? (
                 <button
                     type="button"
-                    onClick={handleStartScan}
+                    onClick={startScanning}
                     className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm font-medium"
                 >
-                    <ScanBarcode size={30} />
+                    <Camera size={20} />
+                    <span>Escanear DNI</span>
                 </button>
             ) : (
-                <div className="relative">
-                    {/* Botón visual que indica estado de espera */}
-                    <button
-                        type="button"
-                        onClick={() => setIsScanning(false)} // Cancelar al hacer click de nuevo
-                        className="flex items-center gap-2 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors shadow-sm font-medium animate-pulse"
-                    >
-                        <Loader2 size={30} className="animate-spin" />
-                        <span>Esperando lectura...</span>
-                    </button>
+                <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/90 p-4">
+                    <div className="w-full max-w-lg bg-black rounded-lg overflow-hidden relative border border-gray-700">
 
-                    {/* Input invisible que captura el teclado */}
-                    <input
-                        ref={inputRef}
-                        value={inputValue}
-                        onChange={handleChange}
-                        onKeyDown={handleKeyDown}
-                        onBlur={handleBlur}
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                        autoFocus
-                        autoComplete="off"
-                    />
+                        {/* Header con botón cerrar */}
+                        <div className="flex justify-between items-center p-3 bg-gray-900 border-b border-gray-800 absolute top-0 w-full z-10 opacity-80">
+                            <h3 className="text-white text-sm font-medium">Escaneando DNI (PDF417)</h3>
+                            <button
+                                onClick={stopScanning}
+                                className="text-gray-300 hover:text-white bg-gray-800 p-1 rounded-full"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
 
-                    {/* Hint flotante pequeño */}
-                    <div className="absolute top-full left-0 mt-1 text-xs text-yellow-600 bg-yellow-50 px-2 py-1 rounded shadow-sm whitespace-nowrap z-10">
-                        Dispare el escáner ahora o presione ESC para cancelar
+                        {/* Contenedor del video */}
+                        <div id={regionId} className="w-full bg-black min-h-[300px]" />
+
+                        {/* Overlay o instrucciones */}
+                        <div className="p-4 bg-gray-900 text-center border-t border-gray-800">
+                            <p className="text-gray-300 text-sm mb-2">
+                                Enfoque el código de barras PDF417 en el frente del DNI.
+                            </p>
+                            {error && (
+                                <p className="text-red-400 text-xs font-bold mt-2 bg-red-900/20 p-2 rounded">
+                                    {error}
+                                </p>
+                            )}
+                            <button
+                                onClick={stopScanning}
+                                className="mt-2 px-4 py-1 bg-red-600/80 text-white text-sm rounded hover:bg-red-700 transition"
+                            >
+                                Cancelar
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}

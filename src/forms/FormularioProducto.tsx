@@ -19,7 +19,8 @@ const productSchema = z.object({
     stock: z.number().min(0, "El stock es obligatorio"),
     stock_minimo: z.number().optional(),
     ubicacion: z.string().optional(),
-    is_active: z.boolean()
+    is_active: z.boolean(),
+    iva: z.number().optional()
 }).superRefine((data, ctx) => {
     // Validation Logic: Must have at least one price > 0
     const hasUsd = data.precio_usd !== undefined && data.precio_usd > 0;
@@ -120,6 +121,15 @@ export const FormularioProducto: React.FC = () => {
         }
     };
 
+    const handleIVAChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value === '' ? undefined : parseFloat(e.target.value);
+        setValue('iva', val, { shouldValidate: false });
+
+        if (val !== undefined && !isNaN(val) && dolarRate > 0) {
+            setValue('precio_venta_ars', parseFloat((val * dolarRate).toFixed(2)), { shouldValidate: true });
+        }
+    };
+
     const handleArsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value === '' ? undefined : parseFloat(e.target.value);
         setValue('precio_venta_ars', val, { shouldValidate: true });
@@ -201,7 +211,6 @@ export const FormularioProducto: React.FC = () => {
                 marca_id: data.marca_id,
                 precio_costo: data.precio_costo || 0,
                 precio_usd: finalUsd,
-                precio_venta: data.precio_venta_ars || (finalUsd * dolarRate),
                 stock: data.stock,
                 stock_minimo: data.stock_minimo || 0,
                 ubicacion: data.ubicacion,
@@ -417,13 +426,28 @@ export const FormularioProducto: React.FC = () => {
                     </div>
 
                     {/* Activo */}
-                    <div className="md:col-span-2 flex items-center gap-2 mt-2">
+                    <div className="flex items-center gap-2 mt-2">
                         <input
                             type="checkbox"
                             {...register('is_active')}
                             className="accent-celeste w-5 h-5"
                         />
                         <span className="text-blanco">Producto activo</span>
+                    </div>
+
+                    <div>
+                        <label className="text-sm text-blanco">IVA aplicable</label>
+                        <div className="relative">
+                            <input
+                                type="number"
+                                step="0.01"
+                                {...register('iva', { valueAsNumber: true, onChange: handleIVAChange })}
+                                className={`input w-full bg-slate-50 text-slate-900 pl-7 ${errors.iva ? 'border-red-500' : ''}`}
+                            />
+                        </div>
+                        {errors.iva && (
+                            <p className="text-red-500 text-xs mt-1">{errors.iva.message}</p>
+                        )}
                     </div>
 
                     {/* Submit */}
