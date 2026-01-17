@@ -1,5 +1,5 @@
 import { Routes, Route } from 'react-router-dom';
-import { Navbar, ConsultaStock, ConsultaCliente, TicketList, TicketsHistorial, Estadisticas, ListaEmpleados, Home, ListaTicketsTaller, ConfiguracionPage, CierreCajaPage } from '../ventas/components';
+import { Navbar, ConsultaStock, ConsultaCliente, TicketList, TicketsHistorial, Estadisticas, ListaEmpleados, Home, ListaTicketsTaller, ConfiguracionPage, CierreCajaPage, ListaMarcas, ListaProveedores } from '../ventas/components';
 import { LoginPage, NotFoundPage, PagoResultadoPage, UnAuthorized, DevolucionesPage } from '../ventas/page';
 
 import { HomePage, EmpleadoHomePage, TallerHomePage, AdminObrasSociales } from '../page';
@@ -40,7 +40,8 @@ export const AppRouter = () => {
 
                 {/* NUEVAS RUTAS ADMIN */}
                 <Route path="configuracion" element={<ConfiguracionPage />} />
-                <Route path="configuracion" element={<ConfiguracionPage />} />
+                <Route path="configuracion/marcas" element={<ListaMarcas />} />
+                <Route path="configuracion/proveedores" element={<ListaProveedores />} />
                 <Route path="cierre-caja" element={<CierreCajaPage />} />
                 <Route path="obras-sociales" element={<AdminObrasSociales />} />
                 <Route path="liquidaciones" element={<AdminLiquidaciones />} />

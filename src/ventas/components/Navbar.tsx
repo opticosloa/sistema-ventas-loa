@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { Settings, ChevronDown, Wallet, Building2, Tag } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../hooks/useAppDispatch';
 import { startLogout } from '../../store';
 import { Logo } from './Logo';
@@ -18,13 +19,18 @@ export const Navbar = () => {
 
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [showConfigDropdown, setShowConfigDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const configDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Close dropdown when clicking outside
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setShowDropdown(false);
+      }
+      if (configDropdownRef.current && !configDropdownRef.current.contains(event.target as Node)) {
+        setShowConfigDropdown(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -96,6 +102,62 @@ export const Navbar = () => {
                   >
                     Liquidaciones
                   </Link>
+
+                  {/* Config Dropdown */}
+                  <div className="relative" ref={configDropdownRef}>
+                    <button
+                      className="text-white font-medium hover:text-gray-200 transition-colors px-3 py-2 rounded-md hover:bg-white/10 flex items-center gap-1"
+                      onClick={() => setShowConfigDropdown(!showConfigDropdown)}
+                    >
+                      Configuración
+                      <ChevronDown size={16} />
+                    </button>
+
+                    {showConfigDropdown && (
+                      <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-xl overflow-hidden z-50 animate-fade-in-down border border-gray-100">
+                        <div className="py-1">
+                          <Link
+                            to="/admin/configuracion"
+                            className="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 hover:text-cyan-600 flex items-center gap-3 border-b border-gray-100"
+                            onClick={() => setShowConfigDropdown(false)}
+                          >
+                            <Settings size={18} className="text-gray-400" />
+                            <div>
+                              <span className="font-semibold block">Configuración General</span>
+                              <span className="text-xs text-gray-500">Divisas, Cristales, Métodos Pago</span>
+                            </div>
+                          </Link>
+
+                          <Link
+                            to="/cierre-caja"
+                            className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-cyan-600 flex items-center gap-3"
+                            onClick={() => setShowConfigDropdown(false)}
+                          >
+                            <Wallet size={18} className="text-gray-400" />
+                            Cierre de Caja
+                          </Link>
+
+                          <Link
+                            to="/admin/configuracion/marcas"
+                            className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-cyan-600 flex items-center gap-3"
+                            onClick={() => setShowConfigDropdown(false)}
+                          >
+                            <Tag size={18} className="text-gray-400" />
+                            Marcas
+                          </Link>
+
+                          <Link
+                            to="/admin/configuracion/proveedores"
+                            className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-cyan-600 flex items-center gap-3"
+                            onClick={() => setShowConfigDropdown(false)}
+                          >
+                            <Building2 size={18} className="text-gray-400" />
+                            Proveedores
+                          </Link>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )
             }

@@ -9,10 +9,13 @@ interface BatchCrystalPayload {
     cilindro_min: number;
     cilindro_max: number;
     precio_usd: number;
+    precio_costo: number;
     stock_inicial: number;
+    stock_minimo: number;
+    ubicacion: string;
 }
 
 export const createBatchCristales = async (payload: BatchCrystalPayload) => {
-    const { data } = await LOAApi.post('/stock/cristales/batch', payload);
+    const { data } = await LOAApi.post('/api/crystals/batch', payload);
     return data;
 };

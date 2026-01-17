@@ -3,6 +3,7 @@ export * from './CierreCajaPage';
 export * from './ConfiguracionPage'
 export * from './ConsultaCliente'
 export * from './ConsultaStock';
+export * from './CrystalSettingsSection';
 export * from './Dashboard';
 export * from './DashboardTaller';
 export * from './Estadisticas';
@@ -20,4 +21,6 @@ export * from './ListaTicketsTaller';
 export * from './TicketsHistorial';
 export * from './TicketVenta';
 export * from './UserWidget';
+export * from './ListaMarcas';
+export * from './ListaProveedores';
 export * from './HistorialPrescripciones';

@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw, Save, DollarSign, Calendar } from 'lucide-react';
 import LOAApi from '../../api/LOAApi';
 import { useNumericInput } from '../../hooks/useNumericInput';
+import { CrystalSettingsSection } from './CrystalSettingsSection';
 
 export const ConfiguracionPage: React.FC = () => {
     const queryClient = useQueryClient();
@@ -125,6 +126,8 @@ export const ConfiguracionPage: React.FC = () => {
                         </form>
                     </div>
                 </div>
+
+                <CrystalSettingsSection />
             </div>
         </div>
     );
