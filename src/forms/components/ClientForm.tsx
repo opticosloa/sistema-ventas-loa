@@ -4,15 +4,6 @@ import { BotonEscanearDNI } from '../../components/ui/BotonEscanearDNI';
 import type { Cliente } from '../../types/Cliente';
 import LOAApi from '../../api/LOAApi';
 
-const OBRA_SOCIAL_OPTIONS = [
-    "SIN OBRA SOCIAL/PREPAGA",
-    "SWISS MEDICAL ",
-    "AUSTRAL SALUD ",
-    "AMEBPBA",
-    "PAMI",
-    "MUNICIPALIDAD DE LUJAN ",
-    "HIPERVISION",
-];
 
 interface ClientFormProps {
     formState: FormValues;
@@ -35,7 +26,6 @@ export const ClientForm: React.FC<ClientFormProps> = ({
 
     const {
         clienteDNI,
-        clienteObraSocial,
         clienteNameVendedor,
         clienteName,
         clienteApellido,
@@ -139,27 +129,12 @@ export const ClientForm: React.FC<ClientFormProps> = ({
                                 {loading ? 'Buscando...' : 'Buscar'}
                             </button>
 
-                            {/* El componente de escaneo ahora está integrado y funcional */}
-                            <BotonEscanearDNI
-                                onScanComplete={handleClienteEscaneado}
-                                className="h-full"
-                            />
-                        </div>
 
-                        <h3 className="text-blanco text-sm font-medium mt-3">Obra Social</h3>
-                        <select
-                            name="clienteObraSocial"
-                            value={clienteObraSocial}
-                            onChange={onInputChange}
-                            className="input"
-                        >
-                            <option value="" className="text-black">Seleccionar Obra Social</option>
-                            {OBRA_SOCIAL_OPTIONS.map((os) => (
-                                <option key={os} value={os} className="text-black">
-                                    {os.trim()}
-                                </option>
-                            ))}
-                        </select>
+                        </div>
+                        <BotonEscanearDNI
+                            onScanComplete={handleClienteEscaneado}
+                            className="h-full pt-2"
+                        />
                     </label>
                 </div>
 

@@ -9,7 +9,8 @@ interface OpticSectionProps {
     formErrors: Record<string, string>;
     onInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
     stockStatus: { OD: any; OI: any };
-    availableCrystals: any[];
+    materials?: any[];
+    treatments?: any[];
 }
 
 export const OpticSection: React.FC<OpticSectionProps> = ({
@@ -19,7 +20,8 @@ export const OpticSection: React.FC<OpticSectionProps> = ({
     formErrors,
     onInputChange,
     stockStatus,
-    availableCrystals = []
+    materials = [],
+    treatments = []
 }) => {
 
     const getVal = (field: string) => formState[`${prefix}_${field}` as keyof FormValues];
@@ -125,11 +127,11 @@ export const OpticSection: React.FC<OpticSectionProps> = ({
                 </div>
             </div>
 
-            {/* SELECTORES DE TIPO Y COLOR */}
+            {/* BUSCADOR DE CRISTAL (MANUAL / SELECT) */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
                 <div>
                     <label className="block text-sm text-white font-medium mb-1">
-                        Tipo de Cristal <span className="text-red-500">*</span>
+                        Tipo de Cristal (Material) <span className="text-red-500">*</span>
                     </label>
                     <select
                         name={`${prefix}_Tipo`}
@@ -137,10 +139,10 @@ export const OpticSection: React.FC<OpticSectionProps> = ({
                         onChange={onInputChange}
                         className={getInputClass('Tipo')}
                     >
-                        <option value="">Seleccione...</option>
-                        {availableCrystals.map((cristal) => (
-                            <option key={cristal.producto_id || cristal.id} value={cristal.nombre}>
-                                {cristal.nombre} - ${cristal.precio_venta}
+                        <option value="">-- Seleccionar Material --</option>
+                        {materials.map((m: any) => (
+                            <option key={m.material_id || m.id} value={m.nombre}>
+                                {m.nombre}
                             </option>
                         ))}
                     </select>
@@ -154,11 +156,12 @@ export const OpticSection: React.FC<OpticSectionProps> = ({
                         onChange={onInputChange}
                         className={getInputClass('Color')}
                     >
-                        <option value="">Ninguno / Blanco</option>
-                        <option value="Fotocromatico">Fotocromático</option>
-                        <option value="Antireflex">Antireflex</option>
-                        <option value="Blue Cut">Blue Cut</option>
-                        <option value="Teñido">Teñido</option>
+                        <option value="">-- Ninguno / Seleccionar --</option>
+                        {treatments.map((t: any) => (
+                            <option key={t.tratamiento_id || t.id} value={t.nombre}>
+                                {t.nombre}
+                            </option>
+                        ))}
                     </select>
                 </div>
 
@@ -167,10 +170,10 @@ export const OpticSection: React.FC<OpticSectionProps> = ({
                     <input
                         type="text"
                         inputMode="decimal"
-                        pattern="[0-9.,\-]*" // Regex corregida también aquí
+                        pattern="[0-9.,\-]*"
                         name={`${prefix}_DNP`}
                         value={getVal('DNP') || ''}
-                        onChange={handleNumericChange} // Usar el normalizador para el DNP
+                        onChange={handleNumericChange}
                         className={getInputClass('DNP')}
                         placeholder="Distancia interpupilar"
                     />

@@ -8,12 +8,14 @@ interface FrameSectionProps {
     formState: FormValues;
     onInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onPriceChange?: (price: number) => void;
+    dolarRate?: number;
 }
 
 export const FrameSection: React.FC<FrameSectionProps> = ({
     formState,
     onInputChange,
-    onPriceChange
+    onPriceChange,
+    dolarRate = 0
 }) => {
 
     const handleProductChange = (fieldName: keyof FormValues, value: string) => {
@@ -25,17 +27,29 @@ export const FrameSection: React.FC<FrameSectionProps> = ({
         } as React.ChangeEvent<HTMLInputElement>);
     };
 
+    const getPrice = (product: any) => {
+        const usd = product.precio_usd ? Number(product.precio_usd) : 0;
+        const ars = product.precio_venta ? Number(product.precio_venta) : 0;
+        if (usd > 0 && dolarRate > 0) return usd * dolarRate;
+        return ars;
+    };
+
     const renderFrameInput = (label: string, fieldName: keyof FormValues) => (
         <ProductTypeAutocomplete
             label={label}
-            type="ARMAZON" // Specify the type to filter by
+            type="ARMAZON"
             value={formState[fieldName] as string}
-            onChange={(val) => handleProductChange(fieldName, val)}
+            onChange={(val) => {
+                handleProductChange(fieldName, val);
+                if (val === "" && onPriceChange) {
+                    onPriceChange(0);
+                }
+            }}
             onProductSelect={(product) => {
                 const name = product.nombre || product.descripcion || "";
                 handleProductChange(fieldName, name);
-                if (onPriceChange && product.precio_venta) {
-                    onPriceChange(Number(product.precio_venta));
+                if (onPriceChange) {
+                    onPriceChange(getPrice(product));
                 }
             }}
         />

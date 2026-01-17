@@ -105,7 +105,7 @@ export const BotonEscanearDNI: React.FC<BotonEscanearDNIProps> = ({ onScanComple
                 <button
                     type="button"
                     onClick={startScanning}
-                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm font-medium"
+                    className="flex h-full w-full items-center justify-center gap-2 px-4 py-2 bg-celeste text-white rounded-lg hover:bg-celeste/20 transition-colors shadow-sm font-medium"
                 >
                     <Camera size={20} />
                     <span>Escanear DNI</span>

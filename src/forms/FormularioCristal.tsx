@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { createBatchCristales } from '../services';
 import { getMaterials, getTreatments, type CrystalMaterial, type CrystalTreatment } from '../services/crystals.api';
+import Swal from 'sweetalert2';
 
 // Cambiamos los tipos a string para permitir estados intermedios como "-" o ""
 interface BatchForm {
@@ -87,25 +88,25 @@ export const FormularioCristal: React.FC = () => {
         const finalPayload = {
             material: form.material,
             tratamiento: form.tratamiento,
+            esfera_min: esfMin,
+            esfera_max: esfMax,
+            cilindro_min: cilMin,
+            cilindro_max: cilMax,
             precio_usd: parseFloat(form.precio_usd) || 0,
             precio_costo: parseFloat(form.precio_costo) || 0,
             stock_inicial: parseInt(form.stock_inicial) || 0,
             stock_minimo: parseInt(form.stock_minimo) || 2,
-            ubicacion: form.ubicacion,
-            esfera_min: esfMin,
-            esfera_max: esfMax,
-            cilindro_min: cilMin,
-            cilindro_max: cilMax
+            ubicacion: form.ubicacion
         };
 
         setLoading(true);
         try {
             await createBatchCristales(finalPayload as any);
-            alert(`Matriz generada con éxito: Esferas (${esfMin} a ${esfMax}) y Cilindros (${cilMin} a ${cilMax})`);
+            Swal.fire('Cristales creados correctamente', '', 'success');
             setForm(initialForm);
         } catch (error) {
             console.error(error);
-            alert('Error al generar la matriz de cristales');
+            Swal.fire('Error al generar la matriz de cristales', '', 'error');
         } finally {
             setLoading(false);
         }

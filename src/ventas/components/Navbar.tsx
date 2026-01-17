@@ -154,6 +154,15 @@ export const Navbar = () => {
                             <Building2 size={18} className="text-gray-400" />
                             Proveedores
                           </Link>
+
+                          <Link
+                            to="/admin/configuracion/obras-sociales"
+                            className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-cyan-600 flex items-center gap-3"
+                            onClick={() => setShowConfigDropdown(false)}
+                          >
+                            <Building2 size={18} className="text-gray-400" />
+                            Obras Sociales
+                          </Link>
                         </div>
                       </div>
                     )}
