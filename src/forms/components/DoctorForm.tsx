@@ -138,7 +138,7 @@ export const DoctorForm: React.FC<DoctorFormProps> = ({
                     <div className="relative">
                         <input
                             type="text"
-                            value={searchTerm}
+                            value={searchTerm || ''}
                             onChange={(e) => handleSearch(e.target.value)}
                             placeholder="Escriba para buscar..."
                             className={`w-full bg-slate-50 text-slate-900 rounded-md py-2 pl-9 pr-4 border-none focus:ring-2 focus:ring-cyan-500 ${formErrors['doctorNombre'] ? 'ring-2 ring-red-500' : ''}`}
@@ -157,32 +157,37 @@ export const DoctorForm: React.FC<DoctorFormProps> = ({
                     {showResults && !isDoctorSelected && (
                         <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-xl border border-gray-200 max-h-60 overflow-y-auto z-50">
                             {results.length > 0 ? (
-                                results.map((doc) => (
-                                    <button
-                                        key={doc.doctor_id}
-                                        type="button"
-                                        onClick={() => selectDoctor(doc)}
-                                        className="w-full text-left px-4 py-3 hover:bg-cyan-50 border-b border-gray-100 last:border-0 flex flex-col transition-colors"
-                                    >
-                                        <span className="font-bold text-slate-800">{doc.nombre}</span>
-                                        <div className="text-xs text-slate-500 flex gap-2">
-                                            <span>Mat: {doc.matricula}</span>
-                                            {doc.especialidad && <span>• {doc.especialidad}</span>}
-                                        </div>
-                                    </button>
-                                ))
+                                <>
+                                    {results.map((doc) => (
+                                        <button
+                                            key={doc.doctor_id}
+                                            type="button"
+                                            onClick={() => selectDoctor(doc)}
+                                            className="w-full text-left px-4 py-3 hover:bg-cyan-50 border-b border-gray-100 flex flex-col transition-colors"
+                                        >
+                                            <span className="font-bold text-slate-800">{doc.nombre}</span>
+                                            <div className="text-xs text-slate-500 flex gap-2">
+                                                <span>Mat: {doc.matricula}</span>
+                                                {doc.especialidad && <span>• {doc.especialidad}</span>}
+                                            </div>
+                                        </button>
+                                    ))}
+                                    <div className="border-t-2 border-slate-100"></div>
+                                </>
                             ) : (
-                                <div className="p-4 text-center">
-                                    <p className="text-sm text-gray-500 mb-3">No se encontraron resultados.</p>
-                                    <button
-                                        type="button"
-                                        onClick={() => { setShowResults(false); setIsModalOpen(true); }}
-                                        className="text-sm text-cyan-600 font-bold hover:underline flex items-center justify-center gap-1 mx-auto"
-                                    >
-                                        <UserPlus size={16} /> Agregar nuevo médico
-                                    </button>
+                                <div className="p-4 text-center border-b border-gray-100">
+                                    <p className="text-sm text-gray-500">No se encontraron resultados.</p>
                                 </div>
                             )}
+
+                            {/* Botón Permanente de Agregar */}
+                            <button
+                                type="button"
+                                onClick={() => { setShowResults(false); setIsModalOpen(true); }}
+                                className="w-full py-3 text-sm text-cyan-600 font-bold hover:bg-cyan-50 hover:underline flex items-center justify-center gap-2 transition-colors"
+                            >
+                                <UserPlus size={16} /> Agregar nuevo médico
+                            </button>
                         </div>
                     )}
                 </div>

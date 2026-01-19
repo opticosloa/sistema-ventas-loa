@@ -9,24 +9,49 @@ interface DoctorCreateModalProps {
     onClose: () => void;
     onSuccess: (doctor: Doctor) => void;
     initialName?: string;
+    doctorToEdit?: Doctor | null;
 }
 
-export const DoctorCreateModal: React.FC<DoctorCreateModalProps> = ({ isOpen, onClose, onSuccess, initialName = '' }) => {
+export const DoctorCreateModal: React.FC<DoctorCreateModalProps> = ({ isOpen, onClose, onSuccess, initialName = '', doctorToEdit = null }) => {
     const [loading, setLoading] = useState(false);
+
+    // Initialize state when modal opens or doctorToEdit changes
     const [formData, setFormData] = useState({
-        nombre: initialName,
+        nombre: '',
         matricula: '',
         especialidad: '',
         telefono: '',
         email: ''
     });
 
+    React.useEffect(() => {
+        if (isOpen) {
+            if (doctorToEdit) {
+                setFormData({
+                    nombre: doctorToEdit.nombre || '',
+                    matricula: doctorToEdit.matricula || '',
+                    especialidad: doctorToEdit.especialidad || '',
+                    telefono: doctorToEdit.telefono || '',
+                    email: doctorToEdit.email || ''
+                });
+            } else {
+                setFormData({
+                    nombre: initialName || '',
+                    matricula: '',
+                    especialidad: '',
+                    telefono: '',
+                    email: ''
+                });
+            }
+        }
+    }, [isOpen, doctorToEdit, initialName]);
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSubmit = async (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
 
         if (!formData.nombre || !formData.matricula) {
             Swal.fire("Info", "Nombre y Matrícula son obligatorios", "info");
@@ -35,24 +60,36 @@ export const DoctorCreateModal: React.FC<DoctorCreateModalProps> = ({ isOpen, on
 
         setLoading(true);
         try {
-            const { data } = await LOAApi.post('/api/doctors', formData);
+            let resultDoctor;
 
-            if (data.success) {
-                // Determine the result structure. The controller returns result.rows[0]
-                const newDoctor = data.result;
-                Swal.fire("Éxito", "Médico creado correctamente", "success");
-                onSuccess(newDoctor);
-                onClose();
+            if (doctorToEdit) {
+                const { data } = await LOAApi.put(`/api/doctors/${doctorToEdit.doctor_id}`, formData);
+                if (data.success) {
+                    resultDoctor = data.result;
+                    Swal.fire("Éxito", "Médico actualizado correctamente", "success");
+                } else {
+                    throw new Error("Error en actualización");
+                }
             } else {
-                Swal.fire("Error", "Error al crear médico", "error");
+                const { data } = await LOAApi.post('/api/doctors', formData);
+                if (data.success) {
+                    resultDoctor = data.result;
+                    Swal.fire("Éxito", "Médico creado correctamente", "success");
+                } else {
+                    throw new Error("Error en creación");
+                }
             }
+
+            onSuccess(resultDoctor);
+            onClose();
+
         } catch (error: any) {
             console.error(error);
             const msg = error.response?.data?.error?.message || error.message || '';
             if (msg.includes('uq_doctores_matricula') || msg.includes('duplicate')) {
                 Swal.fire("Error", "Esta matrícula ya pertenece a otro médico", "error");
             } else {
-                Swal.fire("Error", "Error al crear médico: " + msg, "error");
+                Swal.fire("Error", "Error al procesar: " + msg, "error");
             }
         } finally {
             setLoading(false);
@@ -60,6 +97,8 @@ export const DoctorCreateModal: React.FC<DoctorCreateModalProps> = ({ isOpen, on
     };
 
     if (!isOpen) return null;
+
+    const isEditing = !!doctorToEdit;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
@@ -69,7 +108,7 @@ export const DoctorCreateModal: React.FC<DoctorCreateModalProps> = ({ isOpen, on
                 <div className="flex items-center justify-between p-5 border-b border-white/20 bg-cyan-900/40">
                     <h3 className="text-xl font-bold text-white flex items-center gap-2">
                         <UserPlus size={24} className="text-cyan-400" />
-                        Nuevo Médico
+                        {isEditing ? 'Editar Médico' : 'Nuevo Médico'}
                     </h3>
                     <button onClick={onClose} className="text-white/60 hover:text-white transition-colors">
                         <X size={24} />
@@ -77,7 +116,7 @@ export const DoctorCreateModal: React.FC<DoctorCreateModalProps> = ({ isOpen, on
                 </div>
 
                 {/* Body */}
-                <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-4">
+                <div className="p-6 overflow-y-auto space-y-4">
 
                     <div className="space-y-4">
                         {/* Nombre */}
@@ -166,7 +205,8 @@ export const DoctorCreateModal: React.FC<DoctorCreateModalProps> = ({ isOpen, on
                             Cancelar
                         </button>
                         <button
-                            type="submit"
+                            type="button"
+                            onClick={handleSubmit}
                             disabled={loading}
                             className={`
                                 flex items-center gap-2 px-6 py-2 rounded-lg font-bold text-white shadow-lg transition-transform active:scale-95
@@ -179,13 +219,13 @@ export const DoctorCreateModal: React.FC<DoctorCreateModalProps> = ({ isOpen, on
                             {loading ? 'Guardando...' : (
                                 <>
                                     <Save size={18} />
-                                    Guardar Médico
+                                    {isEditing ? 'Guardar Cambios' : 'Guardar Médico'}
                                 </>
                             )}
                         </button>
                     </div>
 
-                </form>
+                </div>
             </div>
         </div>
     );

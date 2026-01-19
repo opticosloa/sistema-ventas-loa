@@ -27,4 +27,4 @@ export * from './TicketVenta';
 export * from './UserWidget';
 export * from './ListaMarcas';
 export * from './ListaProveedores';
-export * from './HistorialPrescripciones';
+export * from './DoctorManagementPage';

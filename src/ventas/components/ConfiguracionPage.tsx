@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Swal from 'sweetalert2';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw, Save, DollarSign, Calendar } from 'lucide-react';
+import { RefreshCw, Save, DollarSign, Calendar, Stethoscope } from 'lucide-react';
 import LOAApi from '../../api/LOAApi';
 import { useNumericInput } from '../../hooks/useNumericInput';
 import { CrystalSettingsSection } from './CrystalSettingsSection';
@@ -66,6 +66,19 @@ export const ConfiguracionPage: React.FC = () => {
                     </h1>
                     <p className="text-slate-400 mt-2">Gestiona la cotización del dólar para conversiones automáticas.</p>
                 </header>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                    {/* Doctors Link */}
+                    <a href="/admin/configuracion/doctores" className="bg-slate-800 p-6 rounded-xl border border-slate-700 hover:border-cyan-500/50 hover:bg-slate-800/80 transition-all group">
+                        <div className="flex items-start justify-between mb-4">
+                            <div className="p-3 bg-cyan-500/10 rounded-lg group-hover:bg-cyan-500/20 transition-colors">
+                                <Stethoscope className="text-cyan-400" size={24} />
+                            </div>
+                        </div>
+                        <h3 className="text-lg font-semibold text-white mb-2">Médicos</h3>
+                        <p className="text-sm text-slate-400">Gestionar padrón de médicos, matrículas y especialidades.</p>
+                    </a>
+                </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Tarjeta de Cotización Actual */}

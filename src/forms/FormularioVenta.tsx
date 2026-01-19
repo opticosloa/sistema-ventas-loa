@@ -819,14 +819,14 @@ export const FormularioVenta: React.FC = () => {
         <div className="flex border-b border-gray-700 mb-4">
           <button
             type="button"
-            className={`py-2 px-4 font-medium transition-colors ${activeTab === 'optica' ? 'border-b-2 border-celeste text-celeste' : 'text-gray-400 hover:text-white'}`}
+            className={`py-2 px-4 font-medium text-xl transition-colors ${activeTab === 'optica' ? 'border-b-2 border-celeste text-celeste' : 'text-white hover:text-crema/90'}`}
             onClick={() => setActiveTab('optica')}
           >
             A. Venta Óptica (Receta)
           </button>
           <button
             type="button"
-            className={`py-2 px-4 font-medium transition-colors ${activeTab === 'retail' ? 'border-b-2 border-celeste text-celeste' : 'text-gray-400 hover:text-white'}`}
+            className={`py-2 px-4 font-medium text-xl transition-colors ${activeTab === 'retail' ? 'border-b-2 border-celeste text-celeste' : 'text-white hover:text-crema/90'}`}
             onClick={() => setActiveTab('retail')}
           >
             B. Venta Directa (Productos)

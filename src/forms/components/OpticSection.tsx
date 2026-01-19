@@ -41,7 +41,7 @@ export const OpticSection: React.FC<OpticSectionProps> = ({
 
     return (
         <div className="backdrop-blur-sm p-5 rounded-xl border border-white mb-6">
-            <h3 className="text-xl text-cyan-400 font-bold mb-4 flex items-center">
+            <h3 className="text-3xl text-cyan-400 font-bold mb-4 flex justify-center items-center">
                 {title}
             </h3>
 

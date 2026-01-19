@@ -106,7 +106,7 @@ export const FrameSection: React.FC<FrameSectionProps> = ({
             <div className="flex-grow">
                 <ProductTypeAutocomplete
                     label={label}
-                    type="ARMAZON"
+                    type="ARMAZON,ANTEOJO_SOL"
                     value={formState[fieldName] as string}
                     formatPrice={formatPrice}
                     onChange={(val) => {

@@ -2,13 +2,15 @@ import React, { useState, useEffect, useMemo } from 'react';
 import LOAApi from '../../api/LOAApi';
 
 interface Product {
-    producto_id?: number;
+    producto_id?: string;
     id?: string | number;
     nombre: string;
     descripcion?: string;
     precio_usd: number;
     stock?: number;
     codigo_qr?: string;
+    tipo?: string;
+    marca?: string; // Brand name from join
 }
 
 interface ProductTypeAutocompleteProps {
@@ -59,11 +61,21 @@ export const ProductTypeAutocomplete: React.FC<ProductTypeAutocompleteProps> = (
     const filteredProducts = useMemo(() => {
         if (!value) return products;
         const lowerVal = value.toLowerCase();
-        return products.filter(p =>
-            p.nombre.toLowerCase().includes(lowerVal) ||
-            (p.descripcion && p.descripcion.toLowerCase().includes(lowerVal)) ||
-            (p.codigo_qr && p.codigo_qr.toLowerCase().includes(lowerVal))
-        );
+
+        return products.filter(p => {
+            // Strict match for ID or QR (Scanner behavior)
+            if (String(p.producto_id) === value || p.codigo_qr === value) {
+                return true;
+            }
+
+            // Fuzzy match for properties
+            return (
+                p.nombre.toLowerCase().includes(lowerVal) ||
+                (p.descripcion && p.descripcion.toLowerCase().includes(lowerVal)) ||
+                (p.marca && p.marca.toLowerCase().includes(lowerVal)) ||
+                (p.codigo_qr && p.codigo_qr.toLowerCase().includes(lowerVal))
+            );
+        });
     }, [products, value]);
 
     const handleSelect = (product: Product) => {
@@ -107,7 +119,20 @@ export const ProductTypeAutocomplete: React.FC<ProductTypeAutocompleteProps> = (
                                 className="px-4 py-2 hover:bg-blanco cursor-pointer text-blanco border-b border-blanco last:border-0 flex justify-between items-center"
                             >
                                 <div>
-                                    <div className="font-bold">{product.nombre}</div>
+                                    <div className="font-bold flex items-center gap-2">
+                                        {product.tipo === 'ANTEOJO_SOL' && (
+                                            <span className="bg-yellow-100 text-yellow-800 text-xs font-semibold px-2 py-0.5 rounded border border-yellow-200">
+                                                Sol
+                                            </span>
+                                        )}
+                                        {product.tipo === 'ARMAZON' && (
+                                            <span className="bg-blue-100 text-blue-800 text-xs font-semibold px-2 py-0.5 rounded border border-blue-200">
+                                                Armazón
+                                            </span>
+                                        )}
+                                        {product.nombre}
+                                        {product.marca && <span className="text-gray-400 font-normal ml-1">({product.marca})</span>}
+                                    </div>
                                     <div className="text-xs text-gray-400">{product.descripcion}</div>
                                 </div>
                                 <div className="text-green-400 font-bold">

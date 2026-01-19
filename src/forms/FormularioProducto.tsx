@@ -12,7 +12,7 @@ import { BrandCreateModal } from './components/modals/BrandCreateModal';
 const productSchema = z.object({
     nombre: z.string().min(1, "El nombre es obligatorio"),
     descripcion: z.string().optional(),
-    tipo: z.enum(['ARMAZON', 'CRISTAL', 'ACCESORIO']),
+    tipo: z.enum(['ARMAZON', 'CRISTAL', 'ACCESORIO', 'ANTEOJO_SOL']),
     marca_id: z.string().min(1, "La marca es obligatoria"),
     precio_costo: z.number().optional(),
     precio_usd: z.number().optional(),
@@ -277,6 +277,7 @@ export const FormularioProducto: React.FC = () => {
                             className={`input w-full bg-slate-50 text-slate-900 ${errors.tipo ? 'border-red-500' : ''}`}
                         >
                             <option value="ARMAZON">Armazón</option>
+                            <option value="ANTEOJO_SOL">Anteojo de Sol</option>
                             <option value="CRISTAL">Cristal</option>
                             <option value="ACCESORIO">Accesorio</option>
                         </select>

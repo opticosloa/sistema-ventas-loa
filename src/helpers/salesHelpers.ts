@@ -55,7 +55,7 @@ export const calculateOpticalCoverage = (
 
         if (category === 'CRISTAL' || category === 'CRISTALES') {
             percentage = porcentaje_cristales;
-        } else if (category === 'ARMAZON' || category === 'ARMAZONES' || category === 'MARCO') {
+        } else if (category === 'ARMAZON' || category === 'ARMAZONES' || category === 'MARCO' || category === 'ANTEOJO_SOL') {
             percentage = porcentaje_armazones;
         }
 
