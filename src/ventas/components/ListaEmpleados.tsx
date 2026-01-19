@@ -1,9 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import Swal from 'sweetalert2';
 import { useDebounce } from '../../hooks/useDebounce';
 import type { Empleado } from '../../types/Empleado';
 import LOAApi from '../../api/LOAApi';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { SecurityPinModal } from './SecurityPinModal';
+import { useAuthStore } from '../../hooks';
+import { ProfileEditModal } from './ProfileEditModal';
+import { MaxDiscountModal } from './MaxDiscountModal';
 
 const ITEMS_PER_PAGE = 25;
 
@@ -15,6 +19,8 @@ const formatCurrency = (n?: number) =>
 
 export const ListaEmpleados: React.FC = () => {
   const queryClient = useQueryClient();
+  const { role: userRole, email: userEmail } = useAuthStore();
+
   const { data: empleados = [], isSuccess } = useQuery({
     queryKey: ['users'],
     queryFn: async () => {
@@ -55,13 +61,28 @@ export const ListaEmpleados: React.FC = () => {
     },
     onError: (error) => {
       console.error("Error creating user:", error);
-      alert("Error al crear empleado");
+      Swal.fire("Error", "Error al crear empleado", "error");
+    }
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: async (id: number) => {
+      return await LOAApi.delete(`/api/users/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      closeModal();
+      Swal.fire("Éxito", "Empleado eliminado correctamente", "success");
+    },
+    onError: (error) => {
+      console.error("Error deleting user:", error);
+      Swal.fire("Error", "Error al eliminar empleado", "error");
     }
   });
 
   useEffect(() => {
     if (isSuccess && empleados.length === 0) {
-      alert("No se encontraron empleados (la tabla está vacía).");
+      Swal.fire("Info", "No se encontraron empleados (la tabla está vacía).", "info");
     }
   }, [isSuccess, empleados]);
 
@@ -71,6 +92,8 @@ export const ListaEmpleados: React.FC = () => {
   const [selected, setSelected] = useState<Empleado | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [showPinModal, setShowPinModal] = useState(false);
+  const [showProfileEditModal, setShowProfileEditModal] = useState(false);
+  const [showMaxDiscountModal, setShowMaxDiscountModal] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [newEmpleado, setNewEmpleado] = useState<Empleado>({
     usuario_id: 0,
@@ -143,13 +166,8 @@ export const ListaEmpleados: React.FC = () => {
     ) {
       createUserMutation.mutate(newEmpleado);
     } else {
-      alert('Por favor, completa todos los campos obligatorios.');
+      Swal.fire("Atención", "Por favor, completa todos los campos obligatorios.", "warning");
     }
-  };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setNewEmpleado(prev => ({ ...prev, [name]: name === 'cuit' || name === 'telefono' || name === 'cuenta_corriente' || name === 'max_descuento' ? (parseFloat(value) || 0) : value }));
   };
 
   // keyboard handler for list items
@@ -158,6 +176,11 @@ export const ListaEmpleados: React.FC = () => {
       e.preventDefault();
       openModal(emp);
     }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setNewEmpleado(prev => ({ ...prev, [name]: name === 'cuit' || name === 'telefono' || name === 'cuenta_corriente' || name === 'max_descuento' ? (parseFloat(value) || 0) : value }));
   };
 
   return (
@@ -180,7 +203,7 @@ export const ListaEmpleados: React.FC = () => {
         <input
           value={query}
           onChange={(e) => { setQuery(e.target.value); setPage(1); }}
-          placeholder="Buscar por nombre, apellido, CUIT o teléfono..."
+          placeholder="buscar empleado: En desarrollo - NO USAR"
           className="input w-full md:w-2/3"
           aria-label="Buscar empleado"
         />
@@ -261,7 +284,7 @@ export const ListaEmpleados: React.FC = () => {
                 <td className="px-4 py-3 text-sm whitespace-nowrap">{emp.telefono}</td>
 
                 <td className="px-4 py-3 text-sm min-w-0">
-                  <div className="truncate">{formatDate(emp.last_conect)}</div>
+                  <div className="truncate">{formatDate(emp.updated_at)}</div>
                 </td>
 
                 <td className="px-4 py-3 text-sm whitespace-nowrap">
@@ -273,7 +296,6 @@ export const ListaEmpleados: React.FC = () => {
 
                     <div className="ml-auto flex gap-2">
                       <button onClick={() => openModal(emp)} className="text-azul underline">Ver</button>
-                      <button onClick={() => console.log("Editar", emp.usuario_id)} className="text-celeste">Editar</button>
                     </div>
                   </div>
                 </td>
@@ -333,9 +355,19 @@ export const ListaEmpleados: React.FC = () => {
                 <div className="border rounded p-3 space-y-2">
                   <div className="text-sm"><strong>Cuenta Corriente:</strong> {formatCurrency(selected.cuenta_corriente)}</div>
 
-                  <div className="flex gap-2 mt-3">
-                    <button className="btn-primary" onClick={() => console.log("Editar empleado", selected.usuario_id)}>Editar</button>
-                    {(selected.rol === "ADMIN" || selected.rol === "SUPERADMIN") && (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {/* Botón Editar: Solo si es el propio usuario */}
+                    {selected.email === userEmail && (
+                      <button
+                        className="btn-primary"
+                        onClick={() => setShowProfileEditModal(true)}
+                      >
+                        Editar perfil
+                      </button>
+                    )}
+
+                    {/* Botón Config PIN: Solo si es el propio usuario y tiene rol de admin/superadmin */}
+                    {(selected.rol === "ADMIN" || selected.rol === "SUPERADMIN") && selected.email === userEmail && (
                       <button
                         className="bg-gray-100 text-gray-700 hover:bg-gray-200 px-4 py-2 rounded-lg font-medium transition-colors"
                         onClick={() => setShowPinModal(true)}
@@ -343,6 +375,83 @@ export const ListaEmpleados: React.FC = () => {
                         Config. PIN
                       </button>
                     )}
+
+                    {/* Botón Config Descuento Max: Solo para ADMIN/SUPERADMIN */}
+                    {(userRole === "ADMIN" || userRole === "SUPERADMIN") && (
+                      <button
+                        className="bg-blue-100 text-blue-700 hover:bg-blue-200 px-4 py-2 rounded-lg font-medium transition-colors"
+                        onClick={() => setShowMaxDiscountModal(true)}
+                      >
+                        Desc. Max
+                      </button>
+                    )}
+
+                    {/* Botón Eliminar: Logic de visibilidad granular */}
+                    {(() => {
+                      const targetRole = selected.rol;
+                      const myRole = userRole;
+
+                      // 1. Nadie puede eliminar a un SUPERADMIN
+                      if (targetRole === 'SUPERADMIN') return null;
+
+                      // 2. Si soy SUPERADMIN, puedo eliminar a cualquiera (salvo SUPERADMIN, chequeado arriba)
+                      if (myRole === 'SUPERADMIN') {
+                        return (
+                          <button
+                            className="bg-red-100 text-red-700 hover:bg-red-200 px-4 py-2 rounded-lg font-medium transition-colors"
+                            onClick={async () => {
+                              const result = await Swal.fire({
+                                title: '¿Estás seguro?',
+                                text: `Se eliminará a ${selected.nombre} ${selected.apellido}`,
+                                icon: 'warning',
+                                showCancelButton: true,
+                                confirmButtonColor: '#d33',
+                                cancelButtonColor: '#3085d6',
+                                confirmButtonText: 'Sí, eliminar',
+                                cancelButtonText: 'Cancelar'
+                              });
+                              if (result.isConfirmed) {
+                                deleteUserMutation.mutate(selected.usuario_id);
+                              }
+                            }}
+                          >
+                            Eliminar
+                          </button>
+                        );
+                      }
+
+                      // 3. Si soy ADMIN, puedo eliminar solo a EMPLEADO y TALLER
+                      // (Es decir, NO puedo eliminar a ADMIN ni SUPERADMIN)
+                      if (myRole === 'ADMIN') {
+                        if (targetRole === 'EMPLEADO' || targetRole === 'TALLER') {
+                          return (
+                            <button
+                              className="bg-red-100 text-red-700 hover:bg-red-200 px-4 py-2 rounded-lg font-medium transition-colors"
+                              onClick={async () => {
+                                const result = await Swal.fire({
+                                  title: '¿Estás seguro?',
+                                  text: `Se eliminará a ${selected.nombre} ${selected.apellido}`,
+                                  icon: 'warning',
+                                  showCancelButton: true,
+                                  confirmButtonColor: '#d33',
+                                  cancelButtonColor: '#3085d6',
+                                  confirmButtonText: 'Sí, eliminar',
+                                  cancelButtonText: 'Cancelar'
+                                });
+                                if (result.isConfirmed) {
+                                  deleteUserMutation.mutate(selected.usuario_id);
+                                }
+                              }}
+                            >
+                              Eliminar
+                            </button>
+                          );
+                        }
+                      }
+
+                      return null;
+                    })()}
+
                     <button className="btn-secondary" onClick={() => console.log("Historial", selected.usuario_id)}>Historial</button>
                   </div>
                 </div>
@@ -350,6 +459,33 @@ export const ListaEmpleados: React.FC = () => {
             </section>
           </div>
         </div>
+      )}
+
+      {/* Profile Edit Modal */}
+      {showProfileEditModal && selected && (
+        <ProfileEditModal
+          onClose={() => setShowProfileEditModal(false)}
+          targetEmail={selected.email}
+        />
+      )}
+
+      {/* Max Discount Modal */}
+      {showMaxDiscountModal && selected && (
+        <MaxDiscountModal
+          userId={selected.usuario_id}
+          initialDiscount={selected.max_descuento || 0}
+          onClose={() => setShowMaxDiscountModal(false)}
+          onSuccess={() => {
+            setShowMaxDiscountModal(false);
+            queryClient.invalidateQueries({ queryKey: ['users'] });
+            closeModal(); // Option: close detail modal or just refresh list. User might want to keep detail open?
+            // The instruction implies modifying the discount, so refreshing and maybe re-opening detail would be nice, 
+            // strictly invalidating queries and keeping detail open might show stale data unless we refetch detail or update 'selected'.
+            // For simplicity, let's just close modal for now or assuming the list refresh updates.
+            // Actually, 'selected' is local state, so it won't auto-update. Let's just invalidate and maybe close detail to avoid confusion. or update selected manually.
+            closeModal();
+          }}
+        />
       )}
 
       {/* Modal agregar empleado */}

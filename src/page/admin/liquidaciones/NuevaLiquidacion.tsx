@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Swal from 'sweetalert2';
 import { useNavigate } from 'react-router-dom';
 import LOAApi from '../../../api/LOAApi';
 import type { ObraSocial } from '../../../types/ObrasSociales';
@@ -32,7 +33,7 @@ export const NuevaLiquidacion: React.FC = () => {
     };
 
     const handleSearchItems = async () => {
-        if (!selectedObraId) return alert("Seleccione Obra Social");
+        if (!selectedObraId) return Swal.fire("Info", "Seleccione Obra Social", "info");
         setLoading(true);
         try {
             const { data } = await LOAApi.get(`/api/liquidaciones/pending?obra_social_id=${selectedObraId}`);
@@ -45,7 +46,7 @@ export const NuevaLiquidacion: React.FC = () => {
             }
         } catch (error) {
             console.error(error);
-            alert("Error buscando items pendientes");
+            Swal.fire("Error", "Error buscando items pendientes", "error");
         } finally {
             setLoading(false);
         }
@@ -63,7 +64,7 @@ export const NuevaLiquidacion: React.FC = () => {
 
     const handleSubmit = async () => {
         const selected = pendingItems.filter(i => i.selected);
-        if (selected.length === 0) return alert("Seleccione al menos un item");
+        if (selected.length === 0) return Swal.fire("Info", "Seleccione al menos un item", "info");
 
         // Determine date range from items if not set manually, or use today
         const computedFechaDesde = fechaDesde || new Date().toISOString().split('T')[0];
@@ -80,11 +81,11 @@ export const NuevaLiquidacion: React.FC = () => {
             };
 
             await LOAApi.post('/api/liquidaciones', payload);
-            alert("Liquidación generada exitosamente");
+            Swal.fire("Éxito", "Liquidación generada exitosamente", "success");
             navigate('/admin/liquidaciones');
         } catch (error) {
             console.error(error);
-            alert("Error generando liquidación");
+            Swal.fire("Error", "Error generando liquidación", "error");
         } finally {
             setLoading(false);
         }

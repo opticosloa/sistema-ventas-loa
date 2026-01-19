@@ -1,5 +1,6 @@
 import { checkingCredential, login, logout } from './authSlice';
 import LOAApi from '../../api/LOAApi';
+import Swal from 'sweetalert2';
 
 export const startLoginWithEmailPassword = ({ email, password }: { email: string; password: string }) => {
     return async (dispatch: any) => {
@@ -23,12 +24,13 @@ export const startLoginWithEmailPassword = ({ email, password }: { email: string
                 nombre: user.nombre,
                 apellido: user.apellido,
                 sucursal_id: user.sucursal_id,
+                max_descuento: user.max_descuento
             }));
 
             return true;
 
         } catch (error: any) {
-            console.log(error);
+            Swal.fire('Error', 'Usuario/Contraseña incorrectos', 'error');
             dispatch(logout({ errorMessage: error.response?.data?.error || 'Error en la autenticación' }));
             return false;
         }
@@ -71,6 +73,7 @@ export const checkAuthToken = () => {
                 nombre: user.nombre,
                 apellido: user.apellido,
                 sucursal_id: user.sucursal_id,
+                max_descuento: user.max_descuento
             }));
 
         } catch (error) {

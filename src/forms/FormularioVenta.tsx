@@ -84,22 +84,37 @@ export const FormularioVenta: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'optica' | 'retail'>('optica');
   const [cart, setCart] = useState<CartItem[]>([]);
 
-  // Prices
-  const [armazonPrecio, setArmazonPrecio] = useState(0);
-  const [cristalesPrecio, setCristalesPrecio] = useState(0);
+
 
   // Discount
+  const [extraPrice, setExtraPrice] = useState(0);
   const [discount, setDiscount] = useState(0);
   const [isDiscountAuthorized, setIsDiscountAuthorized] = useState(false);
   const [showSupervisorModal, setShowSupervisorModal] = useState(false);
 
-  // Stock Status
+  // Stock Status and Optic Items State
+  const [isManuallyAuthorized, setIsManuallyAuthorized] = useState(false);
   const [stockStatus, setStockStatus] = useState<{
     lejos: { OD: any, OI: any },
     cerca: { OD: any, OI: any }
   }>({
     lejos: { OD: null, OI: null },
     cerca: { OD: null, OI: null }
+  });
+
+  // Consolidated State for IDs and Prices (User Request)
+  const [opticItems, setOpticItems] = useState<{
+    armazon: { id: string | null, price: number },
+    lejos_OD: { id: string | null, price: number },
+    lejos_OI: { id: string | null, price: number },
+    cerca_OD: { id: string | null, price: number },
+    cerca_OI: { id: string | null, price: number },
+  }>({
+    armazon: { id: null, price: 0 },
+    lejos_OD: { id: null, price: 0 },
+    lejos_OI: { id: null, price: 0 },
+    cerca_OD: { id: null, price: 0 },
+    cerca_OI: { id: null, price: 0 },
   });
 
   // --- DESTRUCTURING RESTORED ---
@@ -148,10 +163,38 @@ export const FormularioVenta: React.FC = () => {
       const finalPrice = (usd > 0 && dolarRate > 0) ? (usd * dolarRate) : ars;
       return acc + (finalPrice * item.cantidad);
     }, 0);
-    const frameTotal = formState.armazon ? armazonPrecio : 0;
 
-    return retailTotal + frameTotal + cristalesPrecio;
-  }, [cart, armazonPrecio, formState.armazon, cristalesPrecio, dolarRate]);
+    // Sumar items ópticos detectados o seleccionados
+    const opticTotal = Object.values(opticItems).reduce((acc, item) => acc + item.price, 0);
+
+    return retailTotal + opticTotal + extraPrice;
+  }, [cart, opticItems, extraPrice, dolarRate]);
+
+  // Effect to check discount authorization logic
+  useEffect(() => {
+    // 1. If discount is 0, it's always authorized/irrelevant
+    if (discount <= 0) {
+      setIsDiscountAuthorized(true);
+      return;
+    }
+
+    // 2. Calculate current percentage
+    // Avoid division by zero
+    const currentSubtotal = subtotalBruto > 0 ? subtotalBruto : 1;
+    const percentage = (discount / currentSubtotal) * 100;
+
+    // 3. Check if within max_descuento limit
+    if (percentage <= max_descuento) {
+      setIsDiscountAuthorized(true);
+    } else {
+      // 4. If exceeds, check if manually authorized
+      if (isManuallyAuthorized) {
+        setIsDiscountAuthorized(true);
+      } else {
+        setIsDiscountAuthorized(false);
+      }
+    }
+  }, [discount, subtotalBruto, max_descuento, isManuallyAuthorized]);
 
   // 2. Total Final (Restando Descuento si está autorizado)
   const totalVenta = React.useMemo(() => {
@@ -190,13 +233,15 @@ export const FormularioVenta: React.FC = () => {
 
     // 2. Calculate from Form State (Optic items not in cart)
     // Cristales
-    if (cristalesPrecio > 0 && porcentaje_cristales > 0) {
-      totalDisc += cristalesPrecio * (porcentaje_cristales / 100);
+    const crystalsPrice = opticItems.lejos_OD.price + opticItems.lejos_OI.price + opticItems.cerca_OD.price + opticItems.cerca_OI.price;
+    if (crystalsPrice > 0 && porcentaje_cristales > 0) {
+      totalDisc += crystalsPrice * (porcentaje_cristales / 100);
     }
 
     // Armazones (if selected in form dropdown 'armazon')
-    if (formState.armazon && armazonPrecio > 0 && porcentaje_armazones > 0) {
-      totalDisc += armazonPrecio * (porcentaje_armazones / 100);
+    // Armazones (if selected in form dropdown 'armazon')
+    if (formState.armazon && opticItems.armazon.price > 0 && porcentaje_armazones > 0) {
+      totalDisc += opticItems.armazon.price * (porcentaje_armazones / 100);
     }
 
     const finalDisc = Number(totalDisc.toFixed(2));
@@ -206,15 +251,28 @@ export const FormularioVenta: React.FC = () => {
 
   useEffect(() => {
     calculateCoverage();
-  }, [cart, cristalesPrecio, armazonPrecio, selectedObraSocialId, dolarRate]);
+  }, [cart, opticItems, selectedObraSocialId, dolarRate]);
 
   // 1. Nueva lógica de verificación de stock y advertencia
   const checkCrystalStock = async (prefix: 'lejos' | 'cerca', ojo: 'OD' | 'OI') => {
     const esf = formState[`${prefix}_${ojo}_Esf` as keyof FormValues];
     const cil = formState[`${prefix}_${ojo}_Cil` as keyof FormValues];
     const tipoNombre = formState[`${prefix}_Tipo` as keyof FormValues]; // El nombre seleccionado en el select
+    // Tratamiento is optional, but if selected, refine search
+    const tratamiento = formState[`${prefix}_Color` as keyof FormValues] || 'Blanco'; // Default or empty?
 
-    if (!esf || !cil || !tipoNombre) return;
+    if (!esf || !cil || !tipoNombre) {
+      // Clear if empty
+      setStockStatus(prev => ({
+        ...prev,
+        [prefix]: { ...prev[prefix], [ojo]: null }
+      }));
+      setOpticItems(prev => ({
+        ...prev,
+        [`${prefix}_${ojo}`]: { id: null, price: 0 }
+      }));
+      return;
+    }
 
     try {
       // Buscamos si existe la graduación exacta para ese material/tipo
@@ -223,17 +281,37 @@ export const FormularioVenta: React.FC = () => {
           esfera: esf,
           cilindro: cil,
           material: tipoNombre,
-          // El color/tratamiento ya suele estar implícito en el nombre del tipo de producto CRISTAL
+          tratamiento: tratamiento, // Pass treatment if available
         }
       });
+
+      const cristalFound = data.result; // Should be full object now
 
       setStockStatus(prev => ({
         ...prev,
         [prefix]: {
           ...prev[prefix],
-          [ojo]: data.result // data.result es el objeto producto del stock o null
+          [ojo]: cristalFound // data.result es el objeto producto del stock o null
         }
       }));
+
+      // Update Price and ID
+      if (cristalFound && cristalFound.precio_usd) {
+        const precioArs = parseFloat(cristalFound.precio_usd) * dolarRate;
+        setOpticItems(prev => ({
+          ...prev,
+          [`${prefix}_${ojo}`]: {
+            id: cristalFound.cristal_id ? String(cristalFound.cristal_id) : null,
+            price: precioArs
+          }
+        }));
+      } else {
+        // Not found or no price
+        setOpticItems(prev => ({
+          ...prev,
+          [`${prefix}_${ojo}`]: { id: null, price: 0 }
+        }));
+      }
 
     } catch (error) {
       console.error("Error al verificar stock físico:", error);
@@ -252,9 +330,9 @@ export const FormularioVenta: React.FC = () => {
 
     return () => clearTimeout(timer);
   }, [
-    formState.lejos_OD_Esf, formState.lejos_OD_Cil, formState.lejos_Tipo,
+    formState.lejos_OD_Esf, formState.lejos_OD_Cil, formState.lejos_Tipo, formState.lejos_Color,
     formState.lejos_OI_Esf, formState.lejos_OI_Cil,
-    formState.cerca_OD_Esf, formState.cerca_OD_Cil, formState.cerca_Tipo,
+    formState.cerca_OD_Esf, formState.cerca_OD_Cil, formState.cerca_Tipo, formState.cerca_Color,
     formState.cerca_OI_Esf, formState.cerca_OI_Cil
   ]);
 
@@ -305,6 +383,55 @@ export const FormularioVenta: React.FC = () => {
     di_lejos: valOrNull(DI_Lejos),
     di_cerca: valOrNull(DI_Cerca),
     altura: valOrNull(Altura),
+  };
+
+  // Combine Retail Cart + Optical Items for Display
+  // Combine Retail Cart + Optical Items for Display
+  const allItemsForList = React.useMemo(() => {
+    const opticalList: CartItem[] = [];
+
+    // Helper to add optic item
+    const addOptic = (item: { id: string | null, price: number }, name: string) => {
+      if (item.id && item.price > 0) {
+        opticalList.push({
+          producto: {
+            producto_id: Number(item.id) || 0,
+            nombre: name,
+            stock: 0,
+            codigo: 'OPTIC',
+            categoria_id: 0,
+            proveedor_id: 0,
+            precio_costo: 0,
+            precio_usd: 0,
+            min_stock: 0,
+            // @ts-ignore
+            ubicacion: '',
+          } as any,
+          cantidad: 1,
+          subtotal: item.price,
+          allowDelete: false
+        });
+      }
+    };
+
+    // Add Crystals
+    if (opticItems.lejos_OD.price > 0) addOptic(opticItems.lejos_OD, `Cristal Lejos OD ${formState.lejos_Tipo ? `(${formState.lejos_Tipo})` : ''}`);
+    if (opticItems.lejos_OI.price > 0) addOptic(opticItems.lejos_OI, `Cristal Lejos OI ${formState.lejos_Tipo ? `(${formState.lejos_Tipo})` : ''}`);
+    if (opticItems.cerca_OD.price > 0) addOptic(opticItems.cerca_OD, `Cristal Cerca OD ${formState.cerca_Tipo ? `(${formState.cerca_Tipo})` : ''}`);
+    if (opticItems.cerca_OI.price > 0) addOptic(opticItems.cerca_OI, `Cristal Cerca OI ${formState.cerca_Tipo ? `(${formState.cerca_Tipo})` : ''}`);
+
+    // Add Frame
+    if (opticItems.armazon.id && opticItems.armazon.price > 0) {
+      addOptic(opticItems.armazon, "Armazón de Receta");
+    }
+
+    return [...cart, ...opticalList];
+  }, [cart, opticItems, formState.lejos_Tipo, formState.cerca_Tipo]);
+
+  const handleListChange = (newItems: CartItem[]) => {
+    // Keep only retail items (allowDelete undefined or true)
+    const newCart = newItems.filter(item => item.allowDelete !== false);
+    setCart(newCart);
   };
 
   const handleSearchClick = async () => {
@@ -552,6 +679,36 @@ export const FormularioVenta: React.FC = () => {
           return (item.producto as any).precio_venta || 0;
         };
 
+        // SI HAY ARMAZÓN SELECCIONADO, LO AGREGAMOS COMO ITEM
+        // YA ESTÁ INCLUIDO EN itemsDeOptica si opticItems.armazon tiene datos
+
+        const itemsDeOptica = Object.values(opticItems)
+          .filter(item => item.id !== null && item.price > 0)
+          .map(item => ({
+            producto_id: item.id, // cristal_id o producto_id del armazón
+            cantidad: 1,
+            precio_unitario: item.price
+          }));
+
+        const finalItems = [
+          ...cart.map(item => ({
+            producto_id: item.producto.producto_id,
+            cantidad: item.cantidad,
+            precio_unitario: getUnitPrice(item)
+          })),
+          ...itemsDeOptica
+        ];
+
+        // ADD EXTRA PRICE TO FIRST ITEM IF EXISTS
+        if (extraPrice > 0 && finalItems.length > 0) {
+          // We add it to the first item's unit price to ensure the total matches.
+          // logic: (unit * qty) + extra = (unit + extra/qty) * qty
+          const firstItem = finalItems[0];
+          if (firstItem.cantidad > 0) {
+            firstItem.precio_unitario += (extraPrice / firstItem.cantidad);
+          }
+        }
+
         const payload = {
           cliente_id: finalClienteId || null,
           cliente: undefined,
@@ -564,13 +721,11 @@ export const FormularioVenta: React.FC = () => {
           multifocal: (multifocal.tipo && multifocal.tipo !== "") ? multifocal : {},
           observaciones: Observacion || null,
           image_url: imageUrl,
-          items: cart.map(item => ({
-            producto_id: item.producto.producto_id,
-            cantidad: item.cantidad,
-            precio_unitario: getUnitPrice(item)
-          })),
+          items: finalItems,
           descuento: isDiscountAuthorized ? discount : 0
         };
+
+        console.log('PAYLOAD: ', payload);
 
         const res = await LOAApi.post('/api/prescriptions', payload);
         ventaId = res.data.venta_id;
@@ -584,7 +739,7 @@ export const FormularioVenta: React.FC = () => {
           items: cart.map(item => ({
             producto_id: item.producto.producto_id,
             cantidad: item.cantidad,
-            precio_unitario: (item.subtotal && item.cantidad ? item.subtotal / item.cantidad : ((item.producto as any).precio_venta || 0))
+            precio_unitario: (item.producto.precio_usd * dolarRate)
           }))
         };
         const saleRes = await LOAApi.post('/api/sales', salePayload);
@@ -633,6 +788,7 @@ export const FormularioVenta: React.FC = () => {
           handleSearchClick={handleSearchClick}
           loading={loading}
           formErrors={formErrors}
+          setCliente={setCliente}
         />
 
         {/* WORKERS / OS SECTION */}
@@ -718,7 +874,14 @@ export const FormularioVenta: React.FC = () => {
           <FrameSection
             formState={formState as FormValues}
             onInputChange={onInputChange}
-            onPriceChange={setArmazonPrecio}
+            onPriceChange={(precio: number, id: string | null) => {
+              // setArmazonPrecio(precio); // REMOVED: Using centralized state
+              // setSelectedArmazonId(id || null); // REMOVED: Using centralized state
+              setOpticItems(prev => ({
+                ...prev,
+                armazon: { id: id, price: precio }
+              }));
+            }}
             dolarRate={dolarRate}
           />
 
@@ -739,19 +902,29 @@ export const FormularioVenta: React.FC = () => {
           </div>
 
           <div className="p-4 rounded-xl border border-blanco mt-4 flex items-center justify-between ">
-            <label className="text-white font-bold">Precio Laboratorio / Cristales ($):</label>
-            <input
-              type="number"
-              min="0"
-              className="input w-48 text-right text-lg font-bold text-celeste"
-              placeholder="0.00"
-              value={cristalesPrecio || ''}
-              onChange={(e) => setCristalesPrecio(parseFloat(e.target.value) || 0)}
-            />
+            <label className="text-white font-bold">Total Cristales (Auto-calculado) ($):</label>
+            <div className="text-right text-lg font-bold text-celeste">
+              {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(
+                opticItems.lejos_OD.price + opticItems.lejos_OI.price + opticItems.cerca_OD.price + opticItems.cerca_OI.price
+              )}
+            </div>
           </div>
 
-          <SalesItemsList items={cart} onItemsChange={setCart} dolarRate={dolarRate} />
+          <SalesItemsList items={allItemsForList} onItemsChange={handleListChange} dolarRate={dolarRate} />
 
+        </div>
+
+        {/* SECTION: EXTRA PRICE INPUT */}
+        <div className="p-4 rounded-xl border border-blanco mt-4 flex items-center justify-between ">
+          <label className="text-white font-bold">Extra cristal/producto $:</label>
+          <input
+            type="number"
+            min="0"
+            className="input w-48 text-right text-lg font-bold text-yellow-400 border-yellow-500/50 focus:border-yellow-400"
+            placeholder="0.00"
+            value={extraPrice || ''}
+            onChange={(e) => setExtraPrice(parseFloat(e.target.value) || 0)}
+          />
         </div>
 
         {/* SECTION: DISCOUNT & TOTAL (Shared) */}
@@ -769,11 +942,15 @@ export const FormularioVenta: React.FC = () => {
                     value={discount || ''}
                     onChange={(e) => {
                       const val = parseFloat(e.target.value) || 0;
-                      if (val > subtotalBruto) {
-                        setDiscount(subtotalBruto);
-                      } else {
-                        setDiscount(val);
+                      // Determine max allowed value? For now, max is subtotal
+                      let finalVal = val;
+                      if (finalVal > subtotalBruto) {
+                        finalVal = subtotalBruto;
                       }
+
+                      // Update state
+                      setDiscount(finalVal);
+                      setIsManuallyAuthorized(false);
                     }}
 
                   />
@@ -793,7 +970,7 @@ export const FormularioVenta: React.FC = () => {
                 </div>
                 {!isDiscountAuthorized && discount > 0 && (
                   <span className="text-xs text-red-400">
-                    Excede tu máximo de {(max_descuento || 0)}%
+                    Excede tu máximo de {max_descuento}%
                   </span>
                 )}
               </div>
@@ -811,8 +988,9 @@ export const FormularioVenta: React.FC = () => {
           isOpen={showSupervisorModal}
           onClose={() => setShowSupervisorModal(false)}
           onSuccess={(name) => {
-            setIsDiscountAuthorized(true);
-            alert(`Descuento autorizado por: ${name}`);
+            setIsManuallyAuthorized(true); // Enable manual auth override
+            // isDiscountAuthorized will be updated by the useEffect
+            Swal.fire("Info", `Descuento autorizado por: ${name}`, "info");
           }}
           actionName="Aplicar Descuento a Venta"
         />

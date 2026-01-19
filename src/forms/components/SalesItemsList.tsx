@@ -7,6 +7,7 @@ export interface CartItem {
     producto: Producto;
     cantidad: number;
     subtotal: number;
+    allowDelete?: boolean;
 }
 
 interface SalesItemsListProps {
@@ -182,16 +183,22 @@ export const SalesItemsList: React.FC<SalesItemsListProps> = ({ items, onItemsCh
                                     </td>
                                     {!readonly && (
                                         <td className="p-3 text-center">
-                                            <button
-                                                onClick={() => {
-                                                    const newItems = items.filter((_, i) => i !== index);
-                                                    onItemsChange(newItems);
-                                                }}
-                                                className="text-red-400 hover:text-red-300 hover:bg-red-400/10 p-2 rounded-full transition-colors"
-                                                title="Eliminar ítem"
-                                            >
-                                                ❌
-                                            </button>
+                                            {(item.allowDelete !== false) ? (
+                                                <button
+                                                    onClick={() => {
+                                                        const newItems = items.filter((_, i) => i !== index);
+                                                        onItemsChange(newItems);
+                                                    }}
+                                                    className="text-red-400 hover:text-red-300 hover:bg-red-400/10 p-2 rounded-full transition-colors"
+                                                    title="Eliminar ítem"
+                                                >
+                                                    ❌
+                                                </button>
+                                            ) : (
+                                                <span className="text-gray-500 text-xs text-center block" title="Este item depende de la receta">
+                                                    (Receta)
+                                                </span>
+                                            )}
                                         </td>
                                     )}
                                 </tr>

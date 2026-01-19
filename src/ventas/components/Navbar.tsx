@@ -129,7 +129,7 @@ export const Navbar = () => {
                           </Link>
 
                           <Link
-                            to="/cierre-caja"
+                            to="/admin/cierre-caja"
                             className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-cyan-600 flex items-center gap-3"
                             onClick={() => setShowConfigDropdown(false)}
                           >

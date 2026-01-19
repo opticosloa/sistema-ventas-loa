@@ -1,4 +1,5 @@
 import React from 'react';
+import Swal from 'sweetalert2';
 import { QRCodeSVG } from 'qrcode.react';
 
 interface MercadoPagoModalsProps {
@@ -76,7 +77,7 @@ export const MercadoPagoModals: React.FC<MercadoPagoModalsProps> = ({
                             </button>
                             <button
                                 onClick={() => {
-                                    if (!selectedDeviceId) return alert("Seleccione una terminal");
+                                    if (!selectedDeviceId) return Swal.fire("Info", "Seleccione una terminal", "info");
                                     setMpModalOpen(false);
                                     startMpPointFlow(mpAmount, selectedDeviceId);
 

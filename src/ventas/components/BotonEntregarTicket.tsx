@@ -1,4 +1,5 @@
 import { useState } from "react";
+import Swal from 'sweetalert2';
 import LOAApi from "../../api/LOAApi";
 import { useNavigate } from "react-router-dom";
 
@@ -14,16 +15,34 @@ export const BotonEntregarTicket = ({ ticketId, estado }: Props) => {
     if (estado !== 'LISTO' && estado !== 'PAGADA') return null;
 
     const entregar = async () => {
-        if (!confirm('¿Confirmar entrega del ticket?')) return;
+        const result = await Swal.fire({
+            title: '¿Confirmar entrega?',
+            text: "El ticket se marcará como ENTREGADO",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#3085d6',
+            cancelButtonColor: '#d33',
+            confirmButtonText: 'Sí, entregar',
+            cancelButtonText: 'Cancelar'
+        });
+
+        if (!result.isConfirmed) return;
 
         setLoading(true);
         try {
             await LOAApi.post(`/api/ventas/${ticketId}/entregar`);
-            window.location.reload(); // o refetch
-            alert('Ticket entregado correctamente');
-            navigate('/ventas');
+            // window.location.reload(); // o refetch - Swapped reload for better React practice if possible, but keeping logic
+            Swal.fire(
+                'Entregado!',
+                'El ticket ha sido entregado.',
+                'success'
+            ).then(() => {
+                navigate('/ventas');
+                window.location.reload();
+            });
+
         } catch (e) {
-            alert('Error al entregar el ticket');
+            Swal.fire('Error', 'Error al entregar el ticket', 'error');
         } finally {
             setLoading(false);
         }

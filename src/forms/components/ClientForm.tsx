@@ -1,4 +1,5 @@
 import React from 'react';
+import Swal from 'sweetalert2';
 import type { FormValues } from '../../types/ventasFormTypes';
 import { BotonEscanearDNI } from '../../components/ui/BotonEscanearDNI';
 import type { Cliente } from '../../types/Cliente';
@@ -11,6 +12,7 @@ interface ClientFormProps {
     handleSearchClick: () => void;
     loading: boolean;
     formErrors?: Record<string, string>;
+    setCliente: (cliente: Cliente | null) => void;
 }
 
 export const ClientForm: React.FC<ClientFormProps> = ({
@@ -19,6 +21,7 @@ export const ClientForm: React.FC<ClientFormProps> = ({
     handleSearchClick,
     loading,
     formErrors = {},
+    setCliente,
 }) => {
     const getInputClass = (fieldName: string, baseClass: string = "input") => {
         return formErrors[fieldName] ? `${baseClass} ring-2 ring-red-500` : baseClass;
@@ -67,15 +70,28 @@ export const ClientForm: React.FC<ClientFormProps> = ({
                         apellido: datos.apellido,
                         fecha_nacimiento: datos.fecha_nacimiento
                     });
+                    // Actualizar el objeto local si hubo cambios
+                    if (datos.nombre) clienteData.nombre = datos.nombre;
+                    if (datos.apellido) clienteData.apellido = datos.apellido;
+                    if (datos.fecha_nacimiento) clienteData.fecha_nacimiento = datos.fecha_nacimiento;
                 }
+                setCliente(clienteData);
+
             } else {
                 // 3. Si no existe, lo creamos automáticamente
-                await LOAApi.post(`/api/clients`, {
+                const res = await LOAApi.post(`/api/clients`, {
                     dni: datos.dni,
                     nombre: datos.nombre,
                     apellido: datos.apellido,
                     fecha_nacimiento: datos.fecha_nacimiento
                 });
+
+                if (res.data && res.data.success) {
+                    const newClient = res.data.result?.rows?.[0] || res.data.result?.[0] || res.data.result;
+                    if (newClient) {
+                        setCliente(newClient);
+                    }
+                }
             }
 
             // 4. Actualizamos el Formulario (Solución al error ts2345 con ?? '')
@@ -89,7 +105,7 @@ export const ClientForm: React.FC<ClientFormProps> = ({
             }
 
             if (cambioDatos) {
-                alert('✅ Datos del cliente actualizados en el sistema según su DNI');
+                Swal.fire("Actualizado", "✅ Datos del cliente actualizados en el sistema según su DNI", "success");
             }
 
         } catch (error) {

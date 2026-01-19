@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import Swal from 'sweetalert2';
 import { Search, X, Plus } from 'lucide-react';
 import { useForm, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -192,14 +193,14 @@ export const FormularioProducto: React.FC = () => {
                 if (dolarRate > 0) {
                     finalUsd = data.precio_venta_ars / dolarRate;
                 } else {
-                    alert("No hay cotización del dólar configurada para realizar la conversión. Ingrese el precio en USD manualmente.");
+                    Swal.fire("Info", "No hay cotización del dólar configurada para realizar la conversión. Ingrese el precio en USD manualmente.", "info");
                     setLoading(false);
                     return;
                 }
             }
 
             if (!finalUsd || finalUsd <= 0) {
-                alert("El precio en USD no es válido.");
+                Swal.fire("Error", "El precio en USD no es válido.", "error");
                 setLoading(false);
                 return;
             }
@@ -218,7 +219,7 @@ export const FormularioProducto: React.FC = () => {
             };
 
             await LOAApi.post('/api/products', payload);
-            alert('Producto creado correctamente');
+            Swal.fire("Éxito", 'Producto creado correctamente', "success");
 
             // Reset
             reset(initialValues);
@@ -227,7 +228,7 @@ export const FormularioProducto: React.FC = () => {
 
         } catch (error) {
             console.error(error);
-            alert('Error al crear producto');
+            Swal.fire("Error", 'Error al crear producto', "error");
         } finally {
             setLoading(false);
         }
@@ -360,7 +361,7 @@ export const FormularioProducto: React.FC = () => {
 
                     {/* Precio Costo */}
                     <div>
-                        <label className="text-sm text-blanco">Precio Costo</label>
+                        <label className="text-sm text-blanco">Precio Costo <span className="text-red-500">*</span></label>
                         <input
                             type="number"
                             step="0.01"

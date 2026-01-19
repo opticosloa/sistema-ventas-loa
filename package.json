@@ -15,6 +15,7 @@
     "@tailwindcss/vite": "^4.1.11",
     "@tanstack/react-query": "^5.90.16",
     "@types/qrcode.react": "^3.0.0",
+    "@vercel/analytics": "^1.6.1",
     "axios": "^1.13.2",
     "browser-image-compression": "^2.0.2",
     "framer-motion": "^12.23.12",

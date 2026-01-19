@@ -6,8 +6,9 @@ interface Product {
     id?: string | number;
     nombre: string;
     descripcion?: string;
-    precio_venta: number | string;
+    precio_usd: number;
     stock?: number;
+    codigo_qr?: string;
 }
 
 interface ProductTypeAutocompleteProps {
@@ -18,6 +19,7 @@ interface ProductTypeAutocompleteProps {
     label: string;
     placeholder?: string;
     className?: string;
+    formatPrice?: (product: Product) => number | string;
 }
 
 export const ProductTypeAutocomplete: React.FC<ProductTypeAutocompleteProps> = ({
@@ -27,7 +29,8 @@ export const ProductTypeAutocomplete: React.FC<ProductTypeAutocompleteProps> = (
     onProductSelect,
     label,
     placeholder = "Buscar...",
-    className = ""
+    className = "",
+    formatPrice
 }) => {
     const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(false);
@@ -58,7 +61,8 @@ export const ProductTypeAutocomplete: React.FC<ProductTypeAutocompleteProps> = (
         const lowerVal = value.toLowerCase();
         return products.filter(p =>
             p.nombre.toLowerCase().includes(lowerVal) ||
-            (p.descripcion && p.descripcion.toLowerCase().includes(lowerVal))
+            (p.descripcion && p.descripcion.toLowerCase().includes(lowerVal)) ||
+            (p.codigo_qr && p.codigo_qr.toLowerCase().includes(lowerVal))
         );
     }, [products, value]);
 
@@ -107,7 +111,10 @@ export const ProductTypeAutocomplete: React.FC<ProductTypeAutocompleteProps> = (
                                     <div className="text-xs text-gray-400">{product.descripcion}</div>
                                 </div>
                                 <div className="text-green-400 font-bold">
-                                    ${Number(product.precio_venta).toLocaleString('es-AR')}
+                                    {formatPrice
+                                        ? formatPrice(product)
+                                        : `$${Number(product.precio_usd).toLocaleString('es-AR')}`
+                                    }
                                 </div>
                             </li>
                         ))

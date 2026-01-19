@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Swal from 'sweetalert2';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { RefreshCw, Save, DollarSign, Calendar } from 'lucide-react';
 import LOAApi from '../../api/LOAApi';
@@ -24,13 +25,13 @@ export const ConfiguracionPage: React.FC = () => {
             return data.result;
         },
         onSuccess: () => {
-            alert('Cotización actualizada correctamente');
+            Swal.fire("Éxito", "Cotización actualizada correctamente", "success");
             queryClient.invalidateQueries({ queryKey: ['dolarRate'] });
             setManualRate('');
         },
         onError: (err) => {
             console.error(err);
-            alert('Error al actualizar cotización');
+            Swal.fire("Error", "Error al actualizar cotización", "error");
         }
     });
 

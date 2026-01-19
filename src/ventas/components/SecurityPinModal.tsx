@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Swal from 'sweetalert2';
 import LOAApi from '../../api/LOAApi';
 
 interface SecurityPinModalProps {
@@ -23,19 +24,19 @@ export const SecurityPinModal: React.FC<SecurityPinModalProps> = ({ userId, user
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         if (pin.length < 4) {
-            alert('El PIN debe tener al menos 4 dígitos');
+            Swal.fire("Atención", "El PIN debe tener al menos 4 dígitos", "warning");
             return;
         }
 
         setLoading(true);
         try {
             await LOAApi.put(`/api/users/${userId}/pin`, { pin });
-            alert('PIN de seguridad actualizado correctamente');
+            Swal.fire("Éxito", "PIN de seguridad actualizado correctamente", "success");
             onSuccess();
             onClose();
         } catch (error) {
             console.error('Error updating PIN:', error);
-            alert('Error al actualizar el PIN. Por favor intente nuevamente.');
+            Swal.fire("Error", "Error al actualizar el PIN. Por favor intente nuevamente.", "error");
         } finally {
             setLoading(false);
         }

@@ -5,7 +5,7 @@ import { HomePage, EmpleadoHomePage, TallerHomePage, AdminObrasSociales } from '
 import { AuthGuard, RoleGuard, TenantGuard } from '../auth/guards';
 import { useAuthStore } from '../hooks';
 import { FormularioDePago, FormularioVenta, FormularioProducto, FormularioCristal, FormularioDeEntregaTicket } from '../forms';
-import { AdminLiquidaciones, DetalleLiquidacion, NuevaLiquidacion } from '../page/admin/liquidaciones';
+import { AdminLiquidaciones, DetalleLiquidacion, NuevaLiquidacion } from '../page/admin';
 
 export const AppRouter = () => {
   const { status } = useAuthStore();

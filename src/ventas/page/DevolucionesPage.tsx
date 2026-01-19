@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Swal from 'sweetalert2';
 import LOAApi from '../../api/LOAApi';
 import { useAuthStore } from '../../hooks';
 import { SupervisorAuthModal } from '../../components/modals/SupervisorAuthModal';
@@ -34,7 +35,7 @@ export const DevolucionesPage: React.FC = () => {
                     const latest = data.result[0];
                     loadSale(latest.venta_id);
                 } else {
-                    alert("No se encontraron ventas para este DNI");
+                    Swal.fire("Info", "No se encontraron ventas para este DNI", "info");
                     setSale(null);
                 }
             } else {
@@ -43,7 +44,7 @@ export const DevolucionesPage: React.FC = () => {
             }
         } catch (error) {
             console.error(error);
-            alert("Error buscando venta");
+            Swal.fire("Error", "Error buscando venta", "error");
         } finally {
             setLoading(false);
         }
@@ -60,12 +61,12 @@ export const DevolucionesPage: React.FC = () => {
                 setItems(s.items || []);
                 setSelectedItems({});
             } else {
-                alert("Venta no encontrada");
+                Swal.fire("Info", "Venta no encontrada", "info");
                 setSale(null);
             }
         } catch (e) {
             console.error(e);
-            alert("Error cargando detalles");
+            Swal.fire("Error", "Error cargando detalles", "error");
         }
     };
 
@@ -94,7 +95,17 @@ export const DevolucionesPage: React.FC = () => {
 
     const processReturn = async (bypassConfirm = false) => {
         if (!bypassConfirm) {
-            if (!window.confirm("¿Confirmar devolución? Esto anulará los items y generará el movimiento de stock.")) return;
+            const confirmResult = await Swal.fire({
+                title: '¿Confirmar devolución?',
+                text: "Esto anulará los items y generará el movimiento de stock.",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Sí, confirmar',
+                cancelButtonText: 'Cancelar'
+            });
+            if (!confirmResult.isConfirmed) return;
         }
 
         setLoading(true);
@@ -111,7 +122,7 @@ export const DevolucionesPage: React.FC = () => {
             });
 
             if (data.success) {
-                alert("Devolución procesada correctamente");
+                Swal.fire("Éxito", "Devolución procesada correctamente", "success");
                 setSale(null);
                 setItems([]);
                 setSearchId("");
@@ -119,7 +130,7 @@ export const DevolucionesPage: React.FC = () => {
 
         } catch (error) {
             console.error(error);
-            alert("Error procesando devolución");
+            Swal.fire("Error", "Error procesando devolución", "error");
         } finally {
             setLoading(false);
         }
@@ -127,7 +138,7 @@ export const DevolucionesPage: React.FC = () => {
 
     const handleSubmit = async () => {
         const keys = Object.keys(selectedItems);
-        if (keys.length === 0) return alert("Seleccione items para devolver");
+        if (keys.length === 0) return Swal.fire("Atención", "Seleccione items para devolver", "warning");
 
         // Check if user is Admin/SuperAdmin
         if (role === 'ADMIN' || role === 'SUPERADMIN') {

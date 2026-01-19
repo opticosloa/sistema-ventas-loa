@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Swal from 'sweetalert2';
 import LOAApi from '../../api/LOAApi';
 import { QRScanner } from './QRScanner';
 
@@ -31,7 +32,7 @@ export const ProductSearch: React.FC<ProductSearchProps> = ({
     const [showScanner, setShowScanner] = useState(false);
 
     const handleSearch = async (term: string) => {
-        if (!term) return alert("Ingrese un término de búsqueda para " + label);
+        if (!term) return Swal.fire("Info", "Ingrese un término de búsqueda para " + label, "info");
 
         setLoading(true);
         try {
@@ -45,11 +46,11 @@ export const ProductSearch: React.FC<ProductSearchProps> = ({
                     onChange(product.nombre);
                 }
             } else {
-                alert("Producto no encontrado");
+                Swal.fire("Info", "Producto no encontrado", "info");
             }
         } catch (error) {
             console.error(error);
-            alert("Error al buscar producto");
+            Swal.fire("Error", "Error al buscar producto", "error");
         } finally {
             setLoading(false);
         }

@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect } from "react";
+import Swal from 'sweetalert2';
 import type { Producto } from "../../types/Producto";
 import LOAApi from '../../api/LOAApi';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -81,7 +82,7 @@ export const ConsultaStock: React.FC = () => {
       list = list.filter(
         (p: Producto) =>
           p.nombre.toLowerCase().includes(q) ||
-          (p.qr_code && p.qr_code.toLowerCase().includes(q)) ||
+          (p.codigo_qr && p.codigo_qr.toLowerCase().includes(q)) ||
           p.ubicacion.toLowerCase().includes(q)
       );
     }
@@ -118,7 +119,7 @@ export const ConsultaStock: React.FC = () => {
   const handleCopyQr = () => {
     if (qrModal.value) {
       navigator.clipboard.writeText(qrModal.value);
-      alert("Código copiado al portapapeles");
+      Swal.fire("Éxito", "Código copiado al portapapeles", "success");
     }
   };
 
@@ -131,7 +132,7 @@ export const ConsultaStock: React.FC = () => {
     if (!reduceStockModal.product) return;
 
     const amount = parseInt(reduceAmount);
-    if (isNaN(amount) || amount <= 0) return alert("Cantidad inválida");
+    if (isNaN(amount) || amount <= 0) return Swal.fire("Error", "Cantidad inválida", "error");
 
     const product = reduceStockModal.product;
     const newStock = Math.max(0, product.stock - amount);
@@ -146,11 +147,11 @@ export const ConsultaStock: React.FC = () => {
 
       // Invalidar query para refrescar
       queryClient.invalidateQueries({ queryKey: ['products'] });
-      alert("Stock actualizado");
+      Swal.fire("Éxito", "Stock actualizado", "success");
       setReduceStockModal({ open: false, product: null });
     } catch (e) {
       console.error(e);
-      alert("Error al actualizar stock");
+      Swal.fire("Error", "Error al actualizar stock", "error");
     }
   };
 

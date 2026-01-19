@@ -12,9 +12,11 @@ export interface Producto {
   stock: number;
   stock_minimo: number;
   ubicacion: string;
-  qr_code: string;
+  codigo_qr: string;
   ultima_venta: string;
   created_at: string;
   updated_at: string;
   is_active: boolean;
+  precio_usd: number;
+
 };

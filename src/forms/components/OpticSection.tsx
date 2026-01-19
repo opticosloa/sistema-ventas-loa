@@ -39,24 +39,23 @@ export const OpticSection: React.FC<OpticSectionProps> = ({
         return `${baseClass} ${alignClass} ${errorClass}`.trim();
     };
 
-    const hasStockOD = !!stockStatus.OD;
-    const hasStockOI = !!stockStatus.OI;
-
     return (
         <div className="backdrop-blur-sm p-5 rounded-xl border border-white mb-6">
             <h3 className="text-xl text-cyan-400 font-bold mb-4 flex items-center">
                 {title}
-                {hasStockOD && hasStockOI && (
-                    <span className="text-xs bg-green-500/20 text-green-400 ml-3 px-2 py-1 rounded-full border border-green-500/30">
-                        ✓ Stock Disponible
-                    </span>
-                )}
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* OJO DERECHO */}
-                <div className="p-4 rounded-lg border border-white">
-                    <h4 className="text-cyan-100/80 text-sm font-semibold mb-3 uppercase tracking-wider text-center">Ojo Derecho (OD)</h4>
+                <div className={`p-4 rounded-lg border transition-colors ${stockStatus.OD ? (stockStatus.OD.stock > 0 ? 'border-green-500/50 bg-green-500/5' : 'border-red-500/50 bg-red-500/5') : 'border-white'}`}>
+                    <div className="flex justify-between items-center mb-3">
+                        <h4 className="text-cyan-100/80 text-sm font-semibold uppercase tracking-wider">Ojo Derecho (OD)</h4>
+                        {stockStatus.OD && (
+                            <span className={`text-xs px-2 py-0.5 rounded border ${stockStatus.OD.stock > 0 ? 'text-green-400 border-green-500/30 bg-green-500/20' : 'text-red-400 border-red-500/30 bg-red-500/20'}`}>
+                                {stockStatus.OD.stock > 0 ? `Stock: ${stockStatus.OD.stock}` : 'Sin Stock'}
+                            </span>
+                        )}
+                    </div>
                     <div className="grid grid-cols-3 gap-3">
                         {['Esf', 'Cil', 'Eje'].map((label) => (
                             <div key={label}>
@@ -92,8 +91,15 @@ export const OpticSection: React.FC<OpticSectionProps> = ({
                 </div>
 
                 {/* OJO IZQUIERDO */}
-                <div className="p-4 rounded-lg border border-white">
-                    <h4 className="text-cyan-100/80 text-sm font-semibold mb-3 uppercase tracking-wider text-center">Ojo Izquierdo (OI)</h4>
+                <div className={`p-4 rounded-lg border transition-colors ${stockStatus.OI ? (stockStatus.OI.stock > 0 ? 'border-green-500/50 bg-green-500/5' : 'border-red-500/50 bg-red-500/5') : 'border-white'}`}>
+                    <div className="flex justify-between items-center mb-3">
+                        <h4 className="text-cyan-100/80 text-sm font-semibold uppercase tracking-wider">Ojo Izquierdo (OI)</h4>
+                        {stockStatus.OI && (
+                            <span className={`text-xs px-2 py-0.5 rounded border ${stockStatus.OI.stock > 0 ? 'text-green-400 border-green-500/30 bg-green-500/20' : 'text-red-400 border-red-500/30 bg-red-500/20'}`}>
+                                {stockStatus.OI.stock > 0 ? `Stock: ${stockStatus.OI.stock}` : 'Sin Stock'}
+                            </span>
+                        )}
+                    </div>
                     <div className="grid grid-cols-3 gap-3">
                         {['Esf', 'Cil', 'Eje'].map((label) => (
                             <div key={label}>

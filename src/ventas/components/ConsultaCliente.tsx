@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import Swal from 'sweetalert2';
 import { useNavigate } from 'react-router-dom';
 import { useDebounce } from '../../hooks/useDebounce';
 import type { Cliente } from '../../types/Cliente';
@@ -120,18 +121,18 @@ export const ConsultaCliente: React.FC = () => {
 
   const handleUpdateClient = async () => {
     if (!editData.cliente_id || !editData.nombre || !editData.dni) {
-      alert("Nombre y DNI son obligatorios");
+      Swal.fire("Atención", "Nombre y DNI son obligatorios", "warning");
       return;
     }
 
     if (!editData.dni.toString().match(/^\d+$/)) {
-      alert("El DNI debe contener solo números");
+      Swal.fire("Atención", "El DNI debe contener solo números", "warning");
       return;
     }
 
     try {
       await LOAApi.put(`/api/clients/${editData.cliente_id}`, editData);
-      alert("Cliente actualizado correctamente");
+      Swal.fire("Éxito", "Cliente actualizado correctamente", "success");
 
       // Actualizar estado local y cache
       setSelected(prev => ({ ...prev!, ...editData }));
@@ -139,7 +140,7 @@ export const ConsultaCliente: React.FC = () => {
       setShowEditModal(false);
     } catch (error) {
       console.error(error);
-      alert("Error al actualizar cliente");
+      Swal.fire("Error", "Error al actualizar cliente", "error");
     }
   }
 

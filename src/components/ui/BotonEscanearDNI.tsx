@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import Swal from 'sweetalert2';
 import { X, Camera } from 'lucide-react';
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from 'html5-qrcode';
 import { parseDNIArgentina } from '../../helpers';
@@ -95,7 +96,7 @@ export const BotonEscanearDNI: React.FC<BotonEscanearDNIProps> = ({ onScanComple
         } catch (err: any) {
             console.error("Error parseando DNI:", err);
             // Mostrar error pero no bloquear permanentemente, quizás un toast sería mejor
-            alert("Error leyendo datos del DNI: " + (err.message || "Formato inválido"));
+            Swal.fire("Error", "Error leyendo datos del DNI: " + (err.message || "Formato inválido"), "error");
         }
     };
 

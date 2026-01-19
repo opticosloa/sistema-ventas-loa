@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
+import Swal from 'sweetalert2';
 import LOAApi from '../../api/LOAApi';
 import { useAuthStore } from '../../hooks';
 
 interface ProfileEditModalProps {
     onClose: () => void;
+    targetEmail?: string;
 }
 
-export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ onClose }) => {
-    const { nombre, apellido, email, role } = useAuthStore();
+export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ onClose, targetEmail }) => {
+    const { nombre, apellido, email: authEmail, role } = useAuthStore();
+    const effectiveEmail = targetEmail || authEmail;
 
     const [formData, setFormData] = useState({
         nombre: nombre || '',
@@ -19,7 +22,8 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ onClose }) =
 
     // Extra state for non-editable fields that are not in auth store
     const [extraInfo, setExtraInfo] = useState({
-        cuenta_corriente: 0
+        cuenta_corriente: 0,
+        role: role || ''
     });
 
     const [loading, setLoading] = useState(false);
@@ -27,13 +31,12 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ onClose }) =
 
     useEffect(() => {
         const fetchProfile = async () => {
-            if (!email) {
+            if (!effectiveEmail) {
                 setFetching(false);
                 return;
             }
             try {
-                console.log(email);
-                const { data } = await LOAApi.get(`/api/users/profile/${email}`);
+                const { data } = await LOAApi.get(`/api/users/profile/${effectiveEmail}`);
                 if (data.success && data.result) {
                     const user = data.result;
                     setFormData(prev => ({
@@ -45,7 +48,8 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ onClose }) =
                         fecha_nacimiento: user.fecha_nacimiento ? new Date(user.fecha_nacimiento).toISOString().split('T')[0] : ''
                     }));
                     setExtraInfo({
-                        cuenta_corriente: user.cuenta_corriente || 0
+                        cuenta_corriente: user.cuenta_corriente || 0,
+                        role: user.rol || role || ''
                     });
                 }
             } catch (error) {
@@ -55,7 +59,7 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ onClose }) =
             }
         };
         fetchProfile();
-    }, [email]);
+    }, [effectiveEmail]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setFormData({
@@ -69,20 +73,25 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ onClose }) =
         setLoading(true);
 
         try {
-            const { data } = await LOAApi.put(`/api/users/profile/${email}`, formData);
+            const { data } = await LOAApi.put(`/api/users/profile/${effectiveEmail}`, formData);
 
             if (data.success) {
-                alert('Perfil actualizado correctamente. Los cambios se reflejarán inmediatamente.');
-                window.location.reload();
+                Swal.fire("Éxito", "Perfil actualizado correctamente.", "success");
+
+                if (!targetEmail || targetEmail === authEmail) {
+                    window.location.reload();
+                }
                 onClose();
             }
         } catch (error) {
             console.error('Error updating profile:', error);
-            alert('Error al actualizar el perfil.');
+            Swal.fire("Error", "Error al actualizar el perfil.", "error");
         } finally {
             setLoading(false);
         }
     };
+
+
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -111,18 +120,20 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ onClose }) =
 
                         <div>
                             <label className="block text-sm font-medium text-gray-500 mb-1">Email</label>
-                            <input type="text" value={email || ''} disabled className="input-disabled w-full bg-gray-100 text-gray-500 cursor-not-allowed" />
+                            <input type="text" value={effectiveEmail || ''} disabled className="input-disabled w-full bg-gray-100 text-gray-500 cursor-not-allowed" />
                         </div>
 
                         <div>
                             <label className="block text-sm font-medium text-gray-500 mb-1">Rol</label>
-                            <input type="text" value={role || ''} disabled className="input-disabled w-full bg-gray-100 text-gray-500 cursor-not-allowed" />
+                            <input type="text" value={extraInfo.role || ''} disabled className="input-disabled w-full bg-gray-100 text-gray-500 cursor-not-allowed" />
                         </div>
 
                         <div>
                             <label className="block text-sm font-medium text-gray-500 mb-1">Cuenta Corriente</label>
                             <input type="text" value={fetching ? '...' : `$ ${extraInfo.cuenta_corriente || 0}`} disabled className="input-disabled w-full bg-gray-100 text-gray-500 cursor-not-allowed" />
                         </div>
+
+
                     </div>
 
                     {/* Editable Fields */}

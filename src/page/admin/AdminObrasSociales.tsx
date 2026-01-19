@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Swal from 'sweetalert2';
 import LOAApi from '../../api/LOAApi';
 import type { ObraSocial } from '../../types/ObrasSociales';
 
@@ -54,7 +55,7 @@ export const AdminObrasSociales: React.FC = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!nombre.trim()) return alert("El nombre es requerido");
+        if (!nombre.trim()) return Swal.fire("Atención", "El nombre es requerido", "warning");
 
         const payload: ObraSocial = {
             obra_social_id: editingObra?.obra_social_id,
@@ -70,7 +71,7 @@ export const AdminObrasSociales: React.FC = () => {
             fetchObras();
         } catch (error) {
             console.error("Error saving obra social:", error);
-            alert("Error al guardar");
+            Swal.fire("Error", "Error al guardar", "error");
         }
     };
 

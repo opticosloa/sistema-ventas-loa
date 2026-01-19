@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import Swal from 'sweetalert2';
 import { useUiStore } from '../../hooks';
 import type { Venta } from '../../types/Venta';
 import LOAApi from '../../api/LOAApi';
@@ -38,12 +39,12 @@ export const TicketList: React.FC = () => {
         if (data.success && Array.isArray(data.result)) {
           setTickets(data.result);
           if (data.result.length === 0) {
-            alert("No se encontraron tickets (la tabla está vacía).");
+            Swal.fire("Info", "No se encontraron tickets (la tabla está vacía).", "info");
           }
         }
       } catch (error) {
         console.error("Error fetching tickets:", error);
-        alert("Error al cargar tickets.");
+        Swal.fire("Error", "Error al cargar tickets.", "error");
       }
     };
     fetchTickets();

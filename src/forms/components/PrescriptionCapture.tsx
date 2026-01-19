@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import Swal from 'sweetalert2';
 import imageCompression from 'browser-image-compression';
 import { Camera, Trash2, Image as ImageIcon, RotateCw } from 'lucide-react';
 
@@ -47,7 +48,7 @@ export const PrescriptionCapture: React.FC<PrescriptionCaptureProps> = ({ file, 
             setFile(renamedFile);
         } catch (error) {
             console.error('Error compressing image:', error);
-            alert('Error al procesar la imagen. Intente nuevamente.');
+            Swal.fire("Error", "Error al procesar la imagen. Intente nuevamente.", "error");
         } finally {
             setCompressing(false);
             // Reset input value to allow selecting the same file again if needed

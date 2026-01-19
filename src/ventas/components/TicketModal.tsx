@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import Swal from 'sweetalert2';
 import { useUiStore, useAppSelector } from '../../hooks';
 import LOAApi from '../../api/LOAApi';
 import type { TicketDetail } from '../../types/Ticket';
@@ -37,7 +38,7 @@ export const TicketModal = () => {
       queryClient.invalidateQueries({ queryKey: ['ticket', ticketId] });
       // También invalidar lista de tickets si queremos que se actualice al cerrar
       // queryClient.invalidateQueries({ queryKey: ['tickets'] });
-      alert("Estado actualizado correctamente");
+      Swal.fire("Éxito", "Estado actualizado correctamente", "success");
     }
   });
 
@@ -48,7 +49,7 @@ export const TicketModal = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ticket', ticketId] });
-      alert("Ticket marcado como ENTREGADO");
+      Swal.fire("Éxito", "Ticket marcado como ENTREGADO", "success");
       handlerTicketDetail(null); // Cerrar modal al entregar
     }
   });
@@ -61,9 +62,16 @@ export const TicketModal = () => {
     updateStatusMutation.mutate({ id: ticket.ticket_id, estado: nuevoEstado });
   }
 
-  const handleEntregar = () => {
+  const handleEntregar = async () => {
     if (!ticket) return;
-    if (window.confirm("¿Confirmar entrega al cliente?")) {
+    const result = await Swal.fire({
+      title: '¿Confirmar entrega al cliente?',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Entregar',
+      cancelButtonText: 'Cancelar'
+    });
+    if (result.isConfirmed) {
       deliverMutation.mutate({ id: ticket.ticket_id });
     }
   }

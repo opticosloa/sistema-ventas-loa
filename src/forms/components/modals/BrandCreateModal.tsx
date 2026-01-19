@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Swal from 'sweetalert2';
 import { X, Tag, Save } from 'lucide-react';
 import LOAApi from '../../../api/LOAApi';
 import type { Brand } from '../../../types/Marcas';
@@ -23,7 +24,7 @@ export const BrandCreateModal: React.FC<BrandCreateModalProps> = ({ isOpen, onCl
         e.preventDefault();
 
         if (!nombre.trim()) {
-            alert("El nombre de la marca es obligatorio");
+            Swal.fire("Info", "El nombre de la marca es obligatorio", "info");
             return;
         }
 
@@ -40,16 +41,16 @@ export const BrandCreateModal: React.FC<BrandCreateModalProps> = ({ isOpen, onCl
                 // Let's assume standard behavior:
                 const newBrand = Array.isArray(data.result) ? data.result[0] : (data.result.rows ? data.result.rows[0] : data.result);
 
-                alert("Marca creada correctamente");
+                Swal.fire("Éxito", "Marca creada correctamente", "success");
                 onSuccess(newBrand);
                 onClose();
             } else {
-                alert("Error al crear marca");
+                Swal.fire("Error", "Error al crear marca", "error");
             }
         } catch (error: any) {
             console.error(error);
             const msg = error.response?.data?.error?.message || error.message || '';
-            alert("Error al crear marca: " + msg);
+            Swal.fire("Error", "Error al crear marca: " + msg, "error");
         } finally {
             setLoading(false);
         }

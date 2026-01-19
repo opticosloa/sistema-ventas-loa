@@ -1,5 +1,6 @@
 
 import { useEffect, useState } from 'react';
+import Swal from 'sweetalert2';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import LOAApi from '../../api/LOAApi';
 import type { MetodoPago, PagoParcial } from '../../types/Pago';
@@ -139,30 +140,36 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
     const fetchSaleDetails = async (id: any) => {
         try {
             const { data } = await LOAApi.get(`/api/sales/${id}`);
+
             if (data.success && data.result) {
-                const rows = data.result.rows || (Array.isArray(data.result) ? data.result : []);
-                const sale = rows[0];
+                // Ajustamos para manejar si result es un objeto directo o tiene .rows
+                const sale = data.result.saleObj || (data.result.rows ? data.result.rows[0] : data.result);
 
                 if (sale) {
-                    if (sale.total) setCurrentTotal(parseFloat(sale.total));
+                    // Forzamos el parseo a número para evitar errores de concatenación de strings
+                    const rawTotal = parseFloat(sale.total || 0);
+                    const discountVal = parseFloat(sale.descuento || 0);
+
+                    // Calculamos el Neto (Total - Descuento)
+                    const finalTotal = Math.max(0, rawTotal - discountVal);
+
+                    // IMPORTANTE: Seteamos el total neto para el cobro
+                    setCurrentTotal(finalTotal);
+
+                    console.log('Cálculo de Cobro:', { rawTotal, discountVal, finalTotal });
 
                     if (sale.items && Array.isArray(sale.items)) {
-                        // --- MAPEO DE DATOS AQUÍ ---
                         const mappedItems = sale.items.map((item: any) => ({
                             producto: {
                                 producto_id: item.producto_id,
-                                nombre: item.producto_nombre, // Coincide con el nuevo nombre del SP
-                                precio_venta: item.precio_unitario,
+                                nombre: item.producto_nombre,
+                                precio_venta: parseFloat(item.precio_unitario),
                                 precio_usd: item.precio_usd || 0,
                             },
                             cantidad: Number(item.cantidad),
                             subtotal: Number(item.subtotal)
                         }));
-
                         setSaleItems(mappedItems);
-                    } else {
-                        console.warn("No se encontraron items o el SP no devolvió la columna 'items'");
-                        setSaleItems([]);
                     }
                 }
             }
@@ -198,7 +205,7 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
     };
 
     const handleSearchDni = async () => {
-        if (!dniSearch) return alert("Ingrese DNI");
+        if (!dniSearch) return Swal.fire("Info", "Ingrese DNI", "info");
         try {
             // Endpoint returns LIST of pending sales
             const { data } = await LOAApi.get(`/api/sales/by-client-dni/${dniSearch}`);
@@ -210,27 +217,38 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
                 setCurrentTotal(parseFloat(latest.total));
                 fetchSaleDetails(latest.venta_id);
                 fetchExistingPayments(latest.venta_id);
-                alert(`Venta encontrada: ID ${latest.venta_id} - Total $${latest.total}`);
+                Swal.fire("Encontrado", `Venta encontrada: ID ${latest.venta_id} - Total $${latest.total}`, "success");
             } else {
-                alert("No se encontraron ventas pendientes para este DNI");
+                Swal.fire("Info", "No se encontraron ventas pendientes para este DNI", "info");
             }
         } catch (error) {
             console.error(error);
-            alert("Error buscando ventas");
+            Swal.fire("Error", "Error buscando ventas", "error");
         }
     };
 
     const handleCancelSale = async () => {
         if (!ventaId) return;
-        if (!window.confirm("¿Seguro que deseas cancelar esta venta?")) return;
+        const result = await Swal.fire({
+            title: '¿Cancelar venta?',
+            text: "¿Seguro que deseas cancelar esta venta?",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Sí, cancelar',
+            cancelButtonText: 'No'
+        });
+
+        if (!result.isConfirmed) return;
 
         try {
             await LOAApi.put(`/api/sales/${ventaId}/cancel`);
-            alert("Venta cancelada");
+            Swal.fire("Cancelada", "Venta cancelada", "success");
             navigate('/');
         } catch (error) {
             console.error(error);
-            alert("Error cancelando venta");
+            Swal.fire("Error", "Error cancelando venta", "error");
         }
     };
 
@@ -256,10 +274,10 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
     const [mpAmount, setMpAmount] = useState(0);
 
     const handleAddPayment = () => {
-        if (!selectedMethod) return alert("Seleccioná un método de pago");
+        if (!selectedMethod) return Swal.fire("Info", "Seleccioná un método de pago", "info");
         const amount = parseFloat(amountInput);
-        if (isNaN(amount) || amount <= 0) return alert("Ingresá un monto válido");
-        if (amount > restante + 0.01) return alert("El monto supera el restante");
+        if (isNaN(amount) || amount <= 0) return Swal.fire("Error", "Ingresá un monto válido", "error");
+        if (amount > restante + 0.01) return Swal.fire("Error", "El monto supera el restante", "error");
 
         if (selectedMethod === 'MP') {
             setMpAmount(amount);
@@ -275,7 +293,7 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
 
     const handleRemovePayment = (index: number) => {
         if (pagos[index].readonly || (pagos[index].confirmed && pagos[index].readonly)) { // Only block if DB confirmed
-            alert("No se puede eliminar un pago ya confirmado.");
+            Swal.fire("Error", "No se puede eliminar un pago ya confirmado.", "error");
             return;
         }
         const removedAmount = pagos[index].monto;
@@ -304,7 +322,7 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
                     if (currentStatus !== 'IDLE') {
                         clearInterval(interval);
                         setLoading(false);
-                        alert("Tiempo de espera agotado. Verifique el dispositivo.");
+                        Swal.fire("Tiempo agotado", "Tiempo de espera agotado. Verifique el dispositivo.", "warning");
                         return 'IDLE';
                     }
                     return currentStatus;
@@ -341,7 +359,7 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
                     if (pagoRechazadoReciente && asyncPaymentStatus !== 'IDLE') {
                         setAsyncPaymentStatus('IDLE');
                         setLoading(false);
-                        alert("❌ El pago fue rechazado recientemente. Por favor, intente con otra tarjeta.");
+                        Swal.fire("Rechazado", "❌ El pago fue rechazado recientemente. Por favor, intente con otra tarjeta.", "error");
                         return;
                     }
                     // Check if we have a NEW confirmed payment
@@ -388,12 +406,12 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
         const newPayments = pagos.filter(p => !p.confirmed || !p.readonly);
 
         if (newPayments.length === 0 && restante > 0.01) {
-            alert("Agregue un pago o verifique el monto.");
+            Swal.fire("Info", "Agregue un pago o verifique el monto.", "info");
             return;
         }
 
         if (newPayments.length === 0 && restante <= 0.01) {
-            alert("Venta pagada correctamente.");
+            Swal.fire("Éxito", "Venta pagada correctamente.", "success");
             navigate(`/ventas/${ventaId}`);
             return;
         }
@@ -411,13 +429,13 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
 
             await LOAApi.post('/api/payments/manual', payload);
 
-            alert('Pagos registrados correctamente');
+            Swal.fire("Éxito", "Pagos registrados correctamente", "success");
             fetchExistingPayments(ventaId!.toString());
             setPagos([]);
 
         } catch (error) {
             console.error(error);
-            alert('Error registrando pagos');
+            Swal.fire("Error", "Error registrando pagos", "error");
         } finally {
             setLoading(false);
         }
@@ -436,14 +454,11 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
             if (data.success && data.result?.qr_data) {
                 setQrData(data.result.qr_data);
                 setAsyncPaymentStatus('SHOWING_QR');
-            } else {
-                console.error("Respuesta inesperada QR Dinámico:", data);
-                alert("Error generando QR Dinámico. Intente nuevamente.");
                 setAsyncPaymentStatus('IDLE');
             }
         } catch (e) {
             console.error("MP QR Error:", e);
-            alert("Error iniciando pago QR. Intente nuevamente.");
+            Swal.fire("Error", "Error iniciando pago QR. Intente nuevamente.", "error");
             setAsyncPaymentStatus('IDLE');
             setQrData(null);
         } finally {
@@ -457,7 +472,7 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
         try {
             if (!deviceId) {
                 setLoading(false);
-                return alert("Error: Falta ID de dispositivo");
+                return Swal.fire("Error", "Error: Falta ID de dispositivo", "error");
             }
             await LOAApi.post('/api/payments/mercadopago/point', {
                 venta_id: ventaId,
@@ -468,7 +483,7 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
             setAsyncPaymentStatus('WAITING_POINT');
         } catch (e) {
             console.error("MP Point Error:", e);
-            alert("Error iniciando pago Point. Intente nuevamente.");
+            Swal.fire("Error", "Error iniciando pago Point. Intente nuevamente.", "error");
             setAsyncPaymentStatus('IDLE');
         } finally {
             setLoading(false);
@@ -477,7 +492,7 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
 
     const handleCoverInsurance = async () => {
         if (!ventaId || !selectedObraSocialId || !nroOrden) {
-            alert("Faltan datos para la cobertura");
+            Swal.fire("Info", "Faltan datos para la cobertura", "info");
             return;
         }
         setLoading(true);
@@ -489,7 +504,7 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
             });
 
             if (data.success) {
-                alert(`Cobertura aplicada por $${data.covered_amount}`);
+                Swal.fire("Cobertura Aplicada", `Cobertura aplicada por $${data.covered_amount}`, "success");
                 // Refresh payments
                 fetchExistingPayments(ventaId);
                 // Reset OS fields? Maybe keep them displayed contextually, but good to reset logic.
@@ -497,7 +512,7 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
             }
         } catch (error: any) {
             console.error("Error covering insurance:", error);
-            alert(error.response?.data?.error || "Error aplicando cobertura");
+            Swal.fire("Error", error.response?.data?.error || "Error aplicando cobertura", "error");
         } finally {
             setLoading(false);
         }
@@ -516,7 +531,7 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
 
         } catch (error) {
             console.error("Error updating sale observation:", error);
-            alert("Error al registrar autorización. Intente nuevamente.");
+            Swal.fire("Error", "Error al registrar autorización. Intente nuevamente.", "error");
         } finally {
             setLoading(false);
         }

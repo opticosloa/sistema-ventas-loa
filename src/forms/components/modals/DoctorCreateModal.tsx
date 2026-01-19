@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Swal from 'sweetalert2';
 import { X, UserPlus, Stethoscope, Mail, Phone, Hash, Save } from 'lucide-react';
 import LOAApi from '../../../api/LOAApi';
 import type { Doctor } from '../../../types/Doctor';
@@ -28,7 +29,7 @@ export const DoctorCreateModal: React.FC<DoctorCreateModalProps> = ({ isOpen, on
         e.preventDefault();
 
         if (!formData.nombre || !formData.matricula) {
-            alert("Nombre y Matrícula son obligatorios");
+            Swal.fire("Info", "Nombre y Matrícula son obligatorios", "info");
             return;
         }
 
@@ -39,19 +40,19 @@ export const DoctorCreateModal: React.FC<DoctorCreateModalProps> = ({ isOpen, on
             if (data.success) {
                 // Determine the result structure. The controller returns result.rows[0]
                 const newDoctor = data.result;
-                alert("Médico creado correctamente");
+                Swal.fire("Éxito", "Médico creado correctamente", "success");
                 onSuccess(newDoctor);
                 onClose();
             } else {
-                alert("Error al crear médico");
+                Swal.fire("Error", "Error al crear médico", "error");
             }
         } catch (error: any) {
             console.error(error);
             const msg = error.response?.data?.error?.message || error.message || '';
             if (msg.includes('uq_doctores_matricula') || msg.includes('duplicate')) {
-                alert("Esta matrícula ya pertenece a otro médico");
+                Swal.fire("Error", "Esta matrícula ya pertenece a otro médico", "error");
             } else {
-                alert("Error al crear médico: " + msg);
+                Swal.fire("Error", "Error al crear médico: " + msg, "error");
             }
         } finally {
             setLoading(false);

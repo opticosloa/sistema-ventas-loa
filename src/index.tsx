@@ -1,5 +1,6 @@
 import { createRoot } from 'react-dom/client';
 import './index.css';
+import { Analytics } from "@vercel/analytics/react"
 import { Provider } from 'react-redux';
 import { store } from './store/store';
 import { BrowserRouter } from 'react-router-dom';
@@ -16,13 +17,18 @@ const queryClient = new QueryClient({
 });
 
 createRoot(document.getElementById('root')!).render(
-  <QueryClientProvider client={queryClient}>
-    <Provider store={store}>
-      <AppLoader>
-        <BrowserRouter>
-          <SisVentasApp />
-        </BrowserRouter>
-      </AppLoader>
-    </Provider>
-  </QueryClientProvider>
+  <>
+    <Analytics />
+    <QueryClientProvider client={queryClient}>
+      <Provider store={store}>
+        <AppLoader>
+          <BrowserRouter>
+            <SisVentasApp />
+          </BrowserRouter>
+        </AppLoader>
+      </Provider>
+    </QueryClientProvider>
+  </>
+
+
 )
