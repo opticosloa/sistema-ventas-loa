@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Settings, ChevronDown, Wallet, Building2, Tag } from 'lucide-react';
+import { Settings, ChevronDown, Wallet, Building2, Tag, Layers } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../hooks/useAppDispatch';
 import { startLogout } from '../../store';
 import { Logo } from './Logo';
@@ -8,6 +8,7 @@ import { UserWidget } from './UserWidget';
 import { SideBar } from '.';
 import { useUiStore } from '../../hooks';
 import { ProfileEditModal } from './ProfileEditModal';
+import { BulkPriceUpdateModal } from '../../components/modals/BulkPriceUpdateModal';
 
 
 export const Navbar = () => {
@@ -18,6 +19,7 @@ export const Navbar = () => {
   const { toggleSideBar } = useUiStore();
 
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showBulkPriceModal, setShowBulkPriceModal] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [showConfigDropdown, setShowConfigDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -163,6 +165,14 @@ export const Navbar = () => {
                             <Building2 size={18} className="text-gray-400" />
                             Obras Sociales
                           </Link>
+
+                          <button
+                            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-cyan-600 flex items-center gap-3 border-t border-gray-100"
+                            onClick={() => { setShowConfigDropdown(false); setShowBulkPriceModal(true); }}
+                          >
+                            <Layers size={18} className="text-gray-400" />
+                            Actualización Masiva
+                          </button>
                         </div>
                       </div>
                     )}
@@ -228,6 +238,8 @@ export const Navbar = () => {
       {showProfileModal && (
         <ProfileEditModal onClose={() => setShowProfileModal(false)} />
       )}
+
+      <BulkPriceUpdateModal isOpen={showBulkPriceModal} onClose={() => setShowBulkPriceModal(false)} />
     </>
   )
 }

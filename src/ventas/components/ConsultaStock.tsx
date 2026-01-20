@@ -5,6 +5,9 @@ import LOAApi from '../../api/LOAApi';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { QRCodeSVG } from "qrcode.react";
 import { RefreshButton } from "../../components/ui/RefreshButton";
+import { getCristalStock } from "../../services/stock.api";
+import type { CrystalMaterial } from "../../services/crystals.api";
+import { getMaterials } from "../../services/crystals.api";
 
 const ITEMS_PER_PAGE = 25;
 
@@ -17,40 +20,7 @@ const statusBadge = (stock: number) => {
 export const ConsultaStock: React.FC = () => {
   const queryClient = useQueryClient();
 
-  // 1. Loading State & Data
-  const { data: products = [], isLoading, isSuccess } = useQuery({
-    queryKey: ['products'],
-    queryFn: async () => {
-      const { data } = await LOAApi.get<{ success: boolean; result: any }>('/api/products');
-      const listaProductos = data.result?.rows || data.result;
-      return Array.isArray(listaProductos) ? listaProductos : [];
-    }
-  });
-
-  const { data: crystals = [], isLoading: isLoadingCrystals, refetch: refetchCrystals } = useQuery({
-    queryKey: ['crystals'],
-    queryFn: async () => {
-      // Construct Query String
-      const params = new URLSearchParams();
-      if (crystalFilters.esferaFrom) params.append('esferaFrom', crystalFilters.esferaFrom);
-      if (crystalFilters.esferaTo) params.append('esferaTo', crystalFilters.esferaTo);
-      if (crystalFilters.cilindroFrom) params.append('cilindroFrom', crystalFilters.cilindroFrom);
-      if (crystalFilters.cilindroTo) params.append('cilindroTo', crystalFilters.cilindroTo);
-      if (crystalFilters.material !== 'ALL') params.append('material', crystalFilters.material);
-
-      const { data } = await LOAApi.get<{ success: boolean; result: any }>(`/api/crystals/search-range?${params.toString()}`);
-      return Array.isArray(data.result) ? data.result : [];
-    },
-    enabled: false // Only fetch on manual search or manual trigger
-  });
-
-  useEffect(() => {
-    if (isSuccess && products.length === 0) {
-      // alert("No se encontraron productos (la tabla está vacía)."); // Annoying on refresh if empty
-    }
-  }, [isSuccess, products]);
-
-  // 2. Local State
+  // 2. Local State (Moved up for dependencies)
   const [query, setQuery] = useState("");
   const [categoria, setCategoria] = useState<"" | Producto["tipo"] | "ALL">("");
   const [sortBy, setSortBy] = useState<"stock-desc" | "stock-asc" | "name-asc">("stock-desc");
@@ -61,6 +31,59 @@ export const ConsultaStock: React.FC = () => {
     cilindroFrom: '', cilindroTo: '',
     material: 'ALL', tratamiento: 'ALL'
   });
+  const [crystalSort, setCrystalSort] = useState<'stock-asc' | 'stock-desc'>('stock-asc');
+  const [currencyMode, setCurrencyMode] = useState<'ARS' | 'USD'>('ARS');
+
+  // 1. Loading State & Data
+  const { data: products = [], isLoading, isSuccess } = useQuery({
+    queryKey: ['products'],
+    queryFn: async () => {
+      const { data } = await LOAApi.get<{ success: boolean; result: any }>('/api/products');
+      const listaProductos = data.result?.rows || data.result;
+      return Array.isArray(listaProductos) ? listaProductos : [];
+    }
+  });
+
+
+  // Fetch Dolar
+  const { data: dolarRate = 0 } = useQuery({
+    queryKey: ['dolarRate'],
+    queryFn: async () => {
+      const { data } = await LOAApi.get<{ success: boolean; result: any }>('/api/currency/rate');
+      return data.result.rate || 0;
+    }
+  });
+
+  // Fetch Materials
+  const { data: materials = [] } = useQuery({
+    queryKey: ['materials'],
+    queryFn: getMaterials
+  });
+
+  const { data: crystals = [], isLoading: isLoadingCrystals, refetch: refetchCrystals } = useQuery({
+    queryKey: ['crystals', crystalFilters],
+    queryFn: async () => {
+      // If we are not in crystal tab, we might skip or not.
+      // But user says: "Al cambiar los filtros o al cargar la pestaña"
+      // We will rely on queryKey dependencies for "Al cambiar los filtros".
+      // We also need refetchOnMount or similar for "al cargar la pestaña" (default behavior).
+      return await getCristalStock({
+        esferaFrom: crystalFilters.esferaFrom,
+        esferaTo: crystalFilters.esferaTo,
+        cilindroFrom: crystalFilters.cilindroFrom,
+        cilindroTo: crystalFilters.cilindroTo,
+        material: crystalFilters.material
+      });
+    },
+    enabled: activeInfoTab === 'crystals' // Only fetch when tab is active
+  });
+
+  useEffect(() => {
+    if (isSuccess && products.length === 0) {
+      // alert("No se encontraron productos (la tabla está vacía)."); // Annoying on refresh if empty
+    }
+  }, [isSuccess, products]);
+
 
   // Modals
   const [qrModal, setQrModal] = useState<{ open: boolean, value: string, title: string }>({ open: false, value: '', title: '' });
@@ -103,6 +126,14 @@ export const ConsultaStock: React.FC = () => {
 
     return list;
   }, [query, categoria, sortBy, products]);
+
+  const sortedCrystals = useMemo(() => {
+    if (!crystals) return [];
+    return [...crystals].sort((a: any, b: any) => {
+      if (crystalSort === 'stock-asc') return a.stock - b.stock;
+      return b.stock - a.stock;
+    });
+  }, [crystals, crystalSort]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
   const start = (page - 1) * ITEMS_PER_PAGE;
@@ -193,7 +224,7 @@ export const ConsultaStock: React.FC = () => {
               onClick={() => setActiveInfoTab('crystals')}
               className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${activeInfoTab === 'crystals' ? 'bg-celeste text-azul shadow' : 'text-gray-300 hover:text-white'}`}
             >
-              Cristales (Lab)
+              Cristales
             </button>
           </div>
         </div>
@@ -246,7 +277,22 @@ export const ConsultaStock: React.FC = () => {
       {/* CRYSTALS CONTROLS */}
       {activeInfoTab === 'crystals' && (
         <div className="bg-azul/10 border border-crema rounded-lg p-3 mb-4">
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 items-end">
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-3 items-end">
+            {/* Material Selector */}
+            <div className="col-span-1">
+              <label className="text-xs text-gray-400">Material</label>
+              <select
+                value={crystalFilters.material}
+                onChange={e => setCrystalFilters(prev => ({ ...prev, material: e.target.value }))}
+                className="input w-full"
+              >
+                <option value="ALL">Todos</option>
+                {materials.map((m: CrystalMaterial) => (
+                  <option key={m.material_id} value={m.nombre}>{m.nombre}</option>
+                ))}
+              </select>
+            </div>
+
             <div>
               <label className="text-xs text-gray-400">Esfera Desde</label>
               <input
@@ -282,6 +328,29 @@ export const ConsultaStock: React.FC = () => {
                 onChange={e => setCrystalFilters(prev => ({ ...prev, cilindroTo: e.target.value }))}
                 className="input w-full"
               />
+            </div>
+
+            {/* Sort Selector */}
+            <div className="col-span-1">
+              <label className="text-xs text-gray-400">Orden Stock</label>
+              <select
+                value={crystalSort}
+                onChange={(e) => setCrystalSort(e.target.value as any)}
+                className="input w-full"
+              >
+                <option value="stock-asc">Menor a Mayor</option>
+                <option value="stock-desc">Mayor a Menor</option>
+              </select>
+            </div>
+
+            {/* Currency Toggle */}
+            <div className="col-span-1 flex items-end">
+              <button
+                onClick={() => setCurrencyMode(prev => prev === 'ARS' ? 'USD' : 'ARS')}
+                className='w-full rounded font-bold text-sm transition-colors btn-primary w-full'
+              >
+                {currencyMode === 'ARS' ? 'Ver en USD' : 'Ver en Pesos'}
+              </button>
             </div>
 
             <div className="flex gap-2">
@@ -389,25 +458,43 @@ export const ConsultaStock: React.FC = () => {
                 <th className="px-4 py-3 text-center text-sm">Esfera</th>
                 <th className="px-4 py-3 text-center text-sm">Cilindro</th>
                 <th className="px-4 py-3 text-center text-sm">Stock</th>
-                <th className="px-4 py-3 text-left text-sm">Ubicación</th>
+                <th className="px-4 py-3 text-right text-sm">Precio ({currencyMode})</th>
               </tr>
             </thead>
             <tbody>
-              {crystals.length === 0 ? (
+              {sortedCrystals.length === 0 ? (
                 <tr><td colSpan={6} className="text-center py-4 text-gray-500">No hay resultados (haga clic en Buscar)</td></tr>
               ) : (
-                crystals.map((c: any, idx: number) => (
-                  <tr key={idx} className="border-b last:border-0 hover:bg-gray-50">
-                    <td className="px-4 py-2 text-sm">{c.material}</td>
-                    <td className="px-4 py-2 text-sm">{c.tratamiento}</td>
-                    <td className="px-4 py-2 text-center text-sm font-bold text-azul">{c.esfera}</td>
-                    <td className="px-4 py-2 text-center text-sm font-bold text-azul">{c.cilindro}</td>
-                    <td className="px-4 py-2 text-center text-sm">
-                      <span className={`px-2 py-1 rounded text-xs font-bold ${statusBadge(c.stock)}`}>{c.stock}</span>
-                    </td>
-                    <td className="px-4 py-2 text-sm">{c.ubicacion}</td>
-                  </tr>
-                ))
+                sortedCrystals.map((c: any, idx: number) => {
+                  let precioMostrar = 0;
+
+                  if (currencyMode === 'ARS') {
+                    // Prioritize backend calculated price
+                    precioMostrar = c.precio_pesos > 0
+                      ? c.precio_pesos
+                      : (c.precio_usd || 0) * (dolarRate || 1);
+                  } else {
+                    // Show raw USD price
+                    precioMostrar = c.precio_usd || 0;
+                  }
+
+                  return (
+                    <tr key={idx} className="border-b last:border-0 hover:bg-gray-50">
+                      <td className="px-4 py-2 text-sm">{c.material}</td>
+                      <td className="px-4 py-2 text-sm">{c.tratamiento}</td>
+                      <td className="px-4 py-2 text-center text-sm font-bold text-azul">{c.esfera}</td>
+                      <td className="px-4 py-2 text-center text-sm font-bold text-azul">{c.cilindro}</td>
+                      <td className="px-4 py-2 text-center text-sm">
+                        <span className={`px-2 py-1 rounded text-xs font-bold ${statusBadge(c.stock)}`}>{c.stock}</span>
+                        {c.stock < 2 && <span className="ml-1 text-xs" title="Stock Crítico">⚠️</span>}
+                      </td>
+                      <td className="px-4 py-2 text-right text-sm font-semibold text-green-700">
+                        {currencyMode === 'USD' ? 'US$ ' : '$ '}
+                        {Number(precioMostrar).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

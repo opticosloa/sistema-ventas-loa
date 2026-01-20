@@ -9,6 +9,7 @@ interface BatchForm {
     tratamiento: string;
     precio_usd: string;      // string para el input
     precio_costo: string;   // string para el input
+    porcentaje_ganancia: string; // NEW
     esfera_min: string;     // string para el input
     esfera_max: string;     // string para el input
     cilindro_min: string;   // string para el input
@@ -23,6 +24,7 @@ const initialForm: BatchForm = {
     tratamiento: '',
     precio_usd: '0',
     precio_costo: '0',
+    porcentaje_ganancia: '0',
     esfera_min: '0.00',
     esfera_max: '0.00',
     cilindro_min: '0.00',
@@ -37,6 +39,7 @@ export const FormularioCristal: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [materials, setMaterials] = useState<CrystalMaterial[]>([]);
     const [treatments, setTreatments] = useState<CrystalTreatment[]>([]);
+    const [isManualPrice, setIsManualPrice] = useState(false);
 
     useEffect(() => {
         const loadSettings = async () => {
@@ -51,9 +54,31 @@ export const FormularioCristal: React.FC = () => {
         loadSettings();
     }, []);
 
+    // Calculator Logic
+    useEffect(() => {
+        if (isManualPrice) return;
+
+        const costo = parseFloat(form.precio_costo);
+        const margen = parseFloat(form.porcentaje_ganancia);
+
+        if (!isNaN(costo) && !isNaN(margen)) {
+            const venta = costo * (1 + margen / 100);
+            setForm(prev => ({
+                ...prev,
+                precio_usd: venta.toFixed(2)
+            }));
+        }
+    }, [form.precio_costo, form.porcentaje_ganancia, isManualPrice]);
+
+
     // Simplificamos el cambio: guardamos el valor tal cual viene del input
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
+
+        if (name === 'precio_usd') {
+            setIsManualPrice(true);
+        }
+
         setForm(prev => ({
             ...prev,
             [name]: value,
@@ -104,6 +129,7 @@ export const FormularioCristal: React.FC = () => {
             await createBatchCristales(finalPayload as any);
             Swal.fire('Cristales creados correctamente', '', 'success');
             setForm(initialForm);
+            setIsManualPrice(false); // Reset manual flag on submit
         } catch (error) {
             console.error(error);
             Swal.fire('Error al generar la matriz de cristales', '', 'error');
@@ -127,7 +153,7 @@ export const FormularioCristal: React.FC = () => {
                 {/* DEFINICIÓN DEL LOTE */}
                 <section className="border border-white rounded-xl p-6 shadow-xl">
                     <h3 className="text-lg font-medium text-crema mb-4 border-b border-white/10 pb-2">1. Definición de Lote</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                         <div>
                             <label className="block text-sm text-crema mb-2">Material</label>
                             <select
@@ -165,18 +191,6 @@ export const FormularioCristal: React.FC = () => {
                         </div>
 
                         <div>
-                            <label className="block text-sm text-gray-400 mb-2 font-bold text-green-400">Precio Unitario (USD)</label>
-                            <input
-                                type="number" step="0.01"
-                                required
-                                name="precio_usd"
-                                value={form.precio_usd}
-                                onChange={handleChange}
-                                className={`${inputClass} border-green-500/30 text-lg`}
-                            />
-                        </div>
-
-                        <div>
                             <label className="block text-sm text-gray-400 mb-2 font-bold text-yellow-400">Precio Costo (USD)</label>
                             <input
                                 type="number" step="0.01"
@@ -185,6 +199,30 @@ export const FormularioCristal: React.FC = () => {
                                 value={form.precio_costo}
                                 onChange={handleChange}
                                 className={`${inputClass} border-yellow-500/30 text-lg`}
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm text-gray-400 mb-2 font-bold text-blue-400">Margen (%)</label>
+                            <input
+                                type="number" step="0.01"
+                                required
+                                name="porcentaje_ganancia"
+                                value={form.porcentaje_ganancia}
+                                onChange={handleChange}
+                                className={`${inputClass} border-blue-500/30 text-lg`}
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm text-gray-400 mb-2 font-bold text-green-400">Precio Venta (USD)</label>
+                            <input
+                                type="number" step="0.01"
+                                required
+                                name="precio_usd"
+                                value={form.precio_usd}
+                                onChange={handleChange}
+                                className={`${inputClass} border-green-500/30 text-lg`}
                             />
                         </div>
                     </div>

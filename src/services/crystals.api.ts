@@ -41,3 +41,12 @@ export const updateTreatment = async (id: string, data: { nombre?: string, is_ac
     const { data: response } = await LOAApi.put(`/api/crystals/treatments/${id}`, data);
     return response;
 };
+
+export const updatePricesSelectively = async (material: string, tratamiento: string, porcentaje: number) => {
+    const { data } = await LOAApi.post('/api/crystals/update-prices-selectively', {
+        material,
+        tratamiento,
+        porcentaje
+    });
+    return data;
+};
