@@ -88,7 +88,9 @@ export const FormularioVenta: React.FC = () => {
 
   // Discount
   const [extraPrice, setExtraPrice] = useState(0);
+  const [extraPriceError, setExtraPriceError] = useState(false);
   const [discount, setDiscount] = useState(0);
+  const [discountPct, setDiscountPct] = useState<number>(0);
   const [isDiscountAuthorized, setIsDiscountAuthorized] = useState(false);
   const [showSupervisorModal, setShowSupervisorModal] = useState(false);
 
@@ -125,12 +127,21 @@ export const FormularioVenta: React.FC = () => {
     clienteFechaRecibido,
     clienteTelefono,
     clienteDNI,
-    clienteObraSocial,
     doctorMatricula,
     lejos_OD_Esf,
+    lejos_OD_Cil,
     lejos_OI_Esf,
+    lejos_OI_Cil,
+    lejos_OD_Eje,
+    lejos_OI_Eje,
+    lejos_OD_Add,
+    lejos_OI_Add,
     cerca_OD_Esf,
+    cerca_OD_Cil,
+    cerca_OD_Eje,
     cerca_OI_Esf,
+    cerca_OI_Cil,
+    cerca_OI_Eje,
     multifocalTipo,
     DI_Lejos,
     DI_Cerca,
@@ -138,7 +149,82 @@ export const FormularioVenta: React.FC = () => {
     Observacion,
   } = formState as FormValues;
 
-  // --- EFFECTS ---
+  // --- AUTOMATIC CALCULATION: Addition & Near Sphere ---
+  useEffect(() => {
+    // 1. Sync Lejos OD Add -> Lejos OI Add (if OI Add is empty or logic dictates)
+    // User logic: "Mostly when OD Add is completed, OI Add will be same, so autofill allow modification"
+    // We strictly check if OD Add changed and update OI Add.
+    // To avoid overwriting user manual changes too aggressively, we might check if OI is 0 or empty, OR just always sync one-way.
+    // Given the prompt "se rellene automaticamente... pero que se permita modificar", best UX:
+    // When OD changes, update OI. If user then changes OI, it stays. (Requires tracking previous OD? Or just relying on change event? React State updates on every keystroke).
+    // Simple approach: When `lejos_OD_Add` changes, update `lejos_OI_Add`.
+    // NOTE: This effect runs on EVERY render if we don't be careful. We need to compare specific changes.
+    // Actually, simple useEffect with distinct dependencies is fine but might loop if we are not careful with setFieldValue.
+    // We will do it in a targeted way: checking specific values.
+  }, [lejos_OD_Add]); // Specific effect below
+
+  // LOGIC: Sync OD Add to OI Add
+  useEffect(() => {
+    if (lejos_OD_Add && lejos_OD_Add !== "0") {
+      // Only sync if they are different to avoid loops? 
+      // But if user changed OI explicitly to something else, we shouldn't overwrite it? 
+      // User said "allow modification". If I type in OD, OI updates. If I type in OI, OD stays.
+      // WE ONLY SYNC if OI is different from OD.
+      if (lejos_OI_Add !== lejos_OD_Add) {
+        setFieldValue('lejos_OI_Add', lejos_OD_Add);
+      }
+    }
+  }, [lejos_OD_Add, setFieldValue]); // Removing lejos_OI_Add from deps to avoid circular if we added it.
+
+
+  // LOGIC: Calculate Near Sphere from Far Sphere + Add
+  useEffect(() => {
+    const calculateNear = (esf: string, add: string) => {
+      const esfVal = parseFloat(esf) || 0;
+      const addVal = parseFloat(add) || 0;
+      // If no valid Add, we do nothing? Or we assume Add=0 implies Near=Far?
+      // Usually Near Sphere = Far Sphere + Add.
+      // If Add is 0, Near = Far.
+      const nearVal = esfVal + addVal;
+      // Format to 2 decimals
+      return nearVal.toFixed(2);
+    };
+
+    // Calculate OD
+    const newCercaOD = calculateNear(lejos_OD_Esf, lejos_OD_Add);
+    // Only update if different to avoid loops/unnecessary renders.
+    if (newCercaOD !== cerca_OD_Esf) {
+      setFieldValue('cerca_OD_Esf', newCercaOD);
+    }
+
+    // SYNC CIL/EJE if Add is present (or generally if we want to default to Lejos values)
+    // User: "al cargar un ... Add ... debe cargar el cilindro y eje"
+    if (lejos_OD_Add && lejos_OD_Add !== "0") {
+      if (lejos_OD_Cil !== cerca_OD_Cil) setFieldValue('cerca_OD_Cil', lejos_OD_Cil);
+      if (lejos_OD_Eje !== cerca_OD_Eje) setFieldValue('cerca_OD_Eje', lejos_OD_Eje);
+    }
+  }, [lejos_OD_Esf, lejos_OD_Add, cerca_OD_Esf, lejos_OD_Cil, lejos_OD_Eje, setFieldValue]);
+
+  useEffect(() => {
+    const calculateNear = (esf: string, add: string) => {
+      const esfVal = parseFloat(esf) || 0;
+      const addVal = parseFloat(add) || 0;
+      const nearVal = esfVal + addVal;
+      return nearVal.toFixed(2);
+    };
+
+    // Calculate OI
+    const newCercaOI = calculateNear(lejos_OI_Esf, lejos_OI_Add);
+    if (newCercaOI !== cerca_OI_Esf) {
+      setFieldValue('cerca_OI_Esf', newCercaOI);
+    }
+
+    // SYNC CIL/EJE OI
+    if (lejos_OI_Add && lejos_OI_Add !== "0") {
+      if (lejos_OI_Cil !== cerca_OI_Cil) setFieldValue('cerca_OI_Cil', lejos_OI_Cil);
+      if (lejos_OI_Eje !== cerca_OI_Eje) setFieldValue('cerca_OI_Eje', lejos_OI_Eje);
+    }
+  }, [lejos_OI_Esf, lejos_OI_Add, cerca_OI_Esf, lejos_OI_Cil, lejos_OI_Eje, setFieldValue]);
 
   // --- EFFECTS ---
   // Initial data loading handled by useVentaData custom hook.
@@ -563,8 +649,8 @@ export const FormularioVenta: React.FC = () => {
   const processSale = async (isBudget: boolean = false) => {
     let createPrescription = false;
 
-    // Check if meaningful optical data exists
-    if (lejos_OD_Esf || cerca_OD_Esf || multifocalTipo || formState.armazon) {
+    // Check if meaningful optical data exists AND we are in the Optic tab
+    if (activeTab === 'optica' && (lejos_OD_Esf || cerca_OD_Esf || multifocalTipo || formState.armazon)) {
       createPrescription = true;
     }
 
@@ -597,21 +683,32 @@ export const FormularioVenta: React.FC = () => {
         newErrors.doctorNombre = 'Médico requerido';
       }
 
+      // Helper to check if an eye section is "Active" (Intended to be used)
+      // We consider it active ONLY if user entered values for Sphere or Cylinder.
+      // If values are empty or "0", we consider it inactive unless Type is explicitly selected?
+      // User request: "only mandatory when sphere/cylinder have a value"
+      const isEyeActive = (esf: string, cil: string) => {
+        // If esf or cil is NOT "0" and NOT empty, it is active.
+        if (esf && esf !== "0") return true;
+        if (cil && cil !== "0") return true;
+        return false;
+      };
+
       // Validate Crystals (At least one eye needs Esf + Type)
       // Check Lejos
-      const hasLejosOD = !!lejos_OD_Esf;
-      const hasLejosOI = !!lejos_OI_Esf;
+      const hasLejosOD = isEyeActive(lejos_OD_Esf, lejos_OD_Cil);
+      const hasLejosOI = isEyeActive(lejos_OI_Esf, lejos_OI_Cil);
+
       if (hasLejosOD || hasLejosOI) {
-        if (hasLejosOD && !formState.lejos_Tipo) newErrors.lejos_Tipo = 'Requerido';
-        if (hasLejosOI && !formState.lejos_Tipo) newErrors.lejos_Tipo = 'Requerido';
+        if (!formState.lejos_Tipo) newErrors.lejos_Tipo = 'Requerido';
       }
 
       // Check Cerca
-      const hasCercaOD = !!cerca_OD_Esf;
-      const hasCercaOI = !!cerca_OI_Esf;
+      const hasCercaOD = isEyeActive(cerca_OD_Esf, cerca_OD_Cil);
+      const hasCercaOI = isEyeActive(cerca_OI_Esf, cerca_OI_Cil);
+
       if (hasCercaOD || hasCercaOI) {
-        if (hasCercaOD && !formState.cerca_Tipo) newErrors.cerca_Tipo = 'Requerido';
-        if (hasCercaOI && !formState.cerca_Tipo) newErrors.cerca_Tipo = 'Requerido';
+        if (!formState.cerca_Tipo) newErrors.cerca_Tipo = 'Requerido';
       }
 
       // General Prescription check (if it's not armazon only)
@@ -621,6 +718,28 @@ export const FormularioVenta: React.FC = () => {
       if (hasOpticalData && !formState.lejos_Tipo && !formState.cerca_Tipo && !multifocalTipo) {
         // If they filled esf/cil/eje but NO Tipo, error
         newErrors.general = "Debe seleccionar Tipo de Cristal";
+      }
+
+      // --- MANUAL LOAD VALIDATION ---
+      // Requirement: If crystal is active but NO stock ID found (empty cristalId), 
+      // detect "Manual Load" -> extraPrice mandatory > 0.
+
+      let requiresManualPrice = false;
+
+      // Check Lejos OD
+      if (hasLejosOD && formState.lejos_Tipo && !opticItems.lejos_OD.id) requiresManualPrice = true;
+      if (hasLejosOI && formState.lejos_Tipo && !opticItems.lejos_OI.id) requiresManualPrice = true;
+
+      // Check Cerca OD/OI
+      if (hasCercaOD && formState.cerca_Tipo && !opticItems.cerca_OD.id) requiresManualPrice = true;
+      if (hasCercaOI && formState.cerca_Tipo && !opticItems.cerca_OI.id) requiresManualPrice = true;
+
+      if (requiresManualPrice && extraPrice <= 0) {
+        setExtraPriceError(true);
+        Swal.fire('Atención', 'Debe ingresar un precio manual (Extra) si no selecciona un cristal de stock', 'warning');
+        return;
+      } else {
+        setExtraPriceError(false);
       }
     }
 
@@ -712,7 +831,10 @@ export const FormularioVenta: React.FC = () => {
         const payload = {
           cliente_id: finalClienteId || null,
           cliente: undefined,
-          obraSocial: clienteObraSocial || null,
+          obraSocial: (() => {
+            const selectedOS = obrasSociales.find(os => os.obra_social_id === selectedObraSocialId);
+            return selectedOS ? selectedOS.nombre : null;
+          })(),
           doctor_id: valOrNull((formState as any).doctor_id) || null,
           matricula: valOrNull(doctorMatricula),
           fecha: clienteFechaRecibido ? clienteFechaRecibido.split('T')[0] : null,
@@ -920,10 +1042,13 @@ export const FormularioVenta: React.FC = () => {
           <input
             type="number"
             min="0"
-            className="input w-48 text-right text-lg font-bold text-yellow-400 border-yellow-500/50 focus:border-yellow-400"
+            className={`input w-48 text-right text-lg font-bold text-yellow-400 bg-slate-800 border-yellow-500/50 focus:border-yellow-400 ${extraPriceError ? 'ring-2 ring-red-500 border-red-500' : ''}`}
             placeholder="0.00"
             value={extraPrice || ''}
-            onChange={(e) => setExtraPrice(parseFloat(e.target.value) || 0)}
+            onChange={(e) => {
+              setExtraPrice(parseFloat(e.target.value) || 0);
+              if (extraPriceError && parseFloat(e.target.value) > 0) setExtraPriceError(false);
+            }}
           />
         </div>
 
@@ -931,29 +1056,60 @@ export const FormularioVenta: React.FC = () => {
         <div className="p-4 rounded-xl border border-blanco mt-4">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
             <div className="flex items-center gap-2">
-              <label className="text-white font-bold">Descuento ($):</label>
+              <label className="text-white font-bold">Descuento:</label>
               <div className="flex flex-col gap-1 items-end">
                 <div className="flex gap-2 items-center">
-                  <input
-                    type="number"
-                    min="0"
-                    className={`input w-32 text-right ${isDiscountAuthorized ? 'border-green-500' : ''}`}
-                    placeholder="0.00"
-                    value={discount || ''}
-                    onChange={(e) => {
-                      const val = parseFloat(e.target.value) || 0;
-                      // Determine max allowed value? For now, max is subtotal
-                      let finalVal = val;
-                      if (finalVal > subtotalBruto) {
-                        finalVal = subtotalBruto;
-                      }
 
-                      // Update state
-                      setDiscount(finalVal);
-                      setIsManuallyAuthorized(false);
-                    }}
+                  {/* Container for Inputs */}
+                  <div className="flex items-center ">
+                    {/* PERCENTAGE INPUT */}
+                    <div className="flex items-center bg-crema border-r border-gray-600 px-2 rounded-lg overflow-hidden">
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        className="w-12 text-right text-gray-700 outline-none focus:ring-0 p-1 font-medium"
+                        placeholder="0"
+                        value={discountPct || ''}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value) || 0;
+                          setDiscountPct(val);
+                          // Auto-calculate amount
+                          const newAmount = (subtotalBruto * val) / 100;
+                          setDiscount(Number(newAmount.toFixed(2)));
+                          setIsManuallyAuthorized(false);
+                        }}
+                      />
+                      <span className="text-gray-700 font-bold px-1">%</span>
+                    </div>
 
-                  />
+                    {/* AMOUNT INPUT */}
+                    <div className="flex items-center ml-1 px-4 bg-crema rounded-lg overflow-hidden">
+                      <span className="text-green-500 font-bold px-1">$</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        className={`w-24 bg-transparent text-right text-gray-700 outline-none focus:ring-0 p-2 font-bold ${isDiscountAuthorized ? 'text-gray-700' : 'text-red-600'}`}
+                        placeholder="0.00"
+                        value={discount || ''}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value) || 0;
+                          // Determine max allowed value? For now, max is subtotal
+                          let finalVal = val;
+                          if (finalVal > subtotalBruto) {
+                            finalVal = subtotalBruto;
+                          }
+
+                          // Update state (Manual override, do NOT recalculate PCT)
+                          setDiscount(finalVal);
+                          setIsManuallyAuthorized(false);
+                        }}
+                      />
+                    </div>
+                  </div>
+
                   {!isDiscountAuthorized && discount > 0 ? (
                     <button
                       type="button"
@@ -996,7 +1152,7 @@ export const FormularioVenta: React.FC = () => {
         />
 
         <div className={activeTab === 'retail' ? 'block' : 'hidden'}>
-          <SalesItemsList items={cart} onItemsChange={setCart} dolarRate={dolarRate} />
+          <SalesItemsList items={cart} onItemsChange={setCart} dolarRate={dolarRate} enableScanner={true} />
         </div>
 
         {/* ACTIONS */}

@@ -22,7 +22,7 @@ export const deleteProduct = async (id: number): Promise<any> => {
     return data;
 };
 
-export const updatePricesByBrand = async (marca_id: number, porcentaje: number): Promise<any> => {
+export const updatePricesByBrand = async (marca_id: string, porcentaje: number): Promise<any> => {
     const { data } = await LOAApi.post('/api/products/update-prices-by-brand', {
         marca_id,
         porcentaje

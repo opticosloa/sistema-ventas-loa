@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Search, Package } from 'lucide-react';
 import LOAApi from '../../api/LOAApi';
 import type { Producto } from '../../types/Producto';
+import { QRScanner } from './QRScanner';
 
 export interface CartItem {
     producto: Producto;
@@ -15,14 +16,18 @@ interface SalesItemsListProps {
     onItemsChange: (items: CartItem[]) => void;
     dolarRate?: number;
     readonly?: boolean;
+    enableScanner?: boolean;
 }
 
-export const SalesItemsList: React.FC<SalesItemsListProps> = ({ items, onItemsChange, dolarRate = 0, readonly = false }) => {
+export const SalesItemsList: React.FC<SalesItemsListProps> = ({ items, onItemsChange, dolarRate = 0, readonly = false, enableScanner = false }) => {
     // Autocomplete State
     const [searchTerm, setSearchTerm] = useState("");
     const [results, setResults] = useState<Producto[]>([]);
     const [showResults, setShowResults] = useState(false);
     const [isSearching, setIsSearching] = useState(false);
+
+    // Scanner State
+    const [showScanner, setShowScanner] = useState(false);
 
     const searchTimeout = useRef<any>(null);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -101,17 +106,29 @@ export const SalesItemsList: React.FC<SalesItemsListProps> = ({ items, onItemsCh
             {/* Buscador Autocomplete - Hidden in Readonly */}
             {!readonly && (
                 <div className="relative mb-6">
-                    <div className="relative">
-                        <input
-                            type="text"
-                            className="w-full bg-slate-50 text-slate-900 rounded-lg py-2.5 pl-10 pr-4 outline-none focus:ring-2 focus:ring-cyan-500"
-                            placeholder="Buscar producto por nombre o ID..."
-                            value={searchTerm}
-                            onChange={(e) => handleSearch(e.target.value)}
-                        />
-                        <Search className="absolute left-3 top-3 text-slate-400" size={18} />
-                        {isSearching && (
-                            <div className="absolute right-3 top-3 w-5 h-5 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
+                    <div className="flex gap-2">
+                        <div className="relative flex-1">
+                            <input
+                                type="text"
+                                className="w-full bg-slate-50 text-slate-900 rounded-lg py-2.5 pl-10 pr-4 outline-none focus:ring-2 focus:ring-cyan-500"
+                                placeholder="Buscar producto por nombre o ID..."
+                                value={searchTerm}
+                                onChange={(e) => handleSearch(e.target.value)}
+                            />
+                            <Search className="absolute left-3 top-3 text-slate-400" size={18} />
+                            {isSearching && (
+                                <div className="absolute right-3 top-3 w-5 h-5 border-2 border-cyan-500 border-t-transparent rounded-full animate-spin"></div>
+                            )}
+                        </div>
+                        {enableScanner && (
+                            <button
+                                type="button"
+                                onClick={() => setShowScanner(true)}
+                                className="bg-slate-700 hover:bg-slate-600 text-white px-3 rounded-lg border border-slate-500 transition-colors"
+                                title="Escanear Código"
+                            >
+                                📷
+                            </button>
                         )}
                     </div>
 
@@ -207,6 +224,18 @@ export const SalesItemsList: React.FC<SalesItemsListProps> = ({ items, onItemsCh
                     </table>
                 )}
             </div>
+
+            {/* SCANNER MODAL */}
+            {showScanner && (
+                <QRScanner
+                    onScanSuccess={(decodedText) => {
+                        setSearchTerm(decodedText);
+                        handleSearch(decodedText);
+                        setShowScanner(false);
+                    }}
+                    onClose={() => setShowScanner(false)}
+                />
+            )}
         </section>
     );
 };

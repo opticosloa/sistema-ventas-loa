@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import Swal from 'sweetalert2';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
@@ -156,8 +155,6 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
                     // IMPORTANTE: Seteamos el total neto para el cobro
                     setCurrentTotal(finalTotal);
 
-                    console.log('Cálculo de Cobro:', { rawTotal, discountVal, finalTotal });
-
                     if (sale.items && Array.isArray(sale.items)) {
                         const mappedItems = sale.items.map((item: any) => ({
                             producto: {
@@ -194,7 +191,8 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
                         monto: parseFloat(p.monto),
                         confirmed: p.estado === 'APROBADO' || p.estado === 'CONFIRMADO', // Solo confirmado si aprobado
                         readonly: true,
-                        estado: p.estado // Guardamos estado para UI
+                        estado: p.estado, // Guardamos estado para UI
+                        created_at: p.created_at // Needed for rejection detection logic
                     }));
                     setPagos(mapped);
                 }
@@ -344,19 +342,37 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
 
                 // REFRESH LIST
                 if (Array.isArray(backendPagosList)) {
-                    const now = new Date();
 
                     const pagoRechazadoReciente = backendPagosList.find((p: any) => {
-                        if (p.estado !== 'RECHAZADO') return false;
+                        // Solo nos interesan los RECHAZADOS o CANCELADOS para este debug
+                        if (p.estado !== 'RECHAZADO' && p.estado !== 'CANCELLED') return false;
 
-                        const fechaPago = new Date(p.created_at);
-                        const diferenciaSegundos = Math.abs(now.getTime() - fechaPago.getTime()) / 1000;
+                        const fechaPagoObj = new Date(p.created_at);
+                        const fechaPago = fechaPagoObj.getTime();
+                        const ahoraObj = new Date();
+                        const ahora = ahoraObj.getTime();
 
-                        return diferenciaSegundos < 10; // Solo consideramos rechazos de los últimos 10s
+                        // FIX: Usamos diferencia absoluta en horas
+                        const diferenciaMinutos = Math.abs(ahora - fechaPago) / (1000 * 60);
+
+                        // --- [LOGS CRÍTICOS AQUÍ] ---
+                        console.group(`🔍 Analizando Pago ID: ${p.pago_id}`);
+                        console.log(`Estado: ${p.estado}`);
+                        console.log(`String DB (created_at):`, p.created_at);
+                        console.log(`Browser Parse (fechaPago):`, fechaPagoObj.toString());
+                        console.log(`Browser Actual (ahora):`, ahoraObj.toString());
+                        console.log(`Cálculo: |${ahora} - ${fechaPago}| / 60000`);
+                        console.log(`Resultado Diferencia Minutos: ${diferenciaMinutos}`);
+                        console.log(`¿Es menor a 10?:`, diferenciaMinutos < 10);
+                        console.groupEnd();
+                        // -----------------------------
+
+                        return diferenciaMinutos < 10;
                     });
 
                     // Si encontramos un rechazo reciente y el modal está abierto, lo cerramos
                     if (pagoRechazadoReciente && asyncPaymentStatus !== 'IDLE') {
+                        console.log("✅ CONDICIÓN CUMPLIDA: Cerrando modal por rechazo.");
                         setAsyncPaymentStatus('IDLE');
                         setLoading(false);
                         Swal.fire("Rechazado", "❌ El pago fue rechazado recientemente. Por favor, intente con otra tarjeta.", "error");

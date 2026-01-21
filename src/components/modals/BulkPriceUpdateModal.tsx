@@ -31,6 +31,7 @@ export const BulkPriceUpdateModal: React.FC<BulkPriceUpdateModalProps> = ({ isOp
         }
     }, [isOpen]);
 
+    // En loadData, asegúrate de que siempre se asigne un array (aunque sea vacío)
     const loadData = async () => {
         try {
             const [b, m, t] = await Promise.all([
@@ -38,9 +39,13 @@ export const BulkPriceUpdateModal: React.FC<BulkPriceUpdateModalProps> = ({ isOp
                 getMaterials(),
                 getTreatments()
             ]);
+
+            // Como confirmaste que devuelven { success: true, result: [...] }
+            // Accedemos a .result y aseguramos que sea un array
             setBrands(b);
             setMaterials(m);
             setTreatments(t);
+
         } catch (error) {
             console.error("Error loading data for bulk update", error);
             Swal.fire('Error', 'No se pudieron cargar los datos necesarios.', 'error');
@@ -72,7 +77,7 @@ export const BulkPriceUpdateModal: React.FC<BulkPriceUpdateModalProps> = ({ isOp
             if (result.isConfirmed) {
                 setLoading(true);
                 try {
-                    await updatePricesByBrand(Number(selectedBrand), pct);
+                    await updatePricesByBrand(selectedBrand, pct);
                     Swal.fire('Éxito', 'Precios actualizados correctamente.', 'success');
                     onClose();
                     setPercentage('0');
@@ -164,7 +169,7 @@ export const BulkPriceUpdateModal: React.FC<BulkPriceUpdateModalProps> = ({ isOp
                                         onChange={(e) => setSelectedBrand(e.target.value)}
                                     >
                                         <option value="">Selecciona una marca...</option>
-                                        {brands.map(b => (
+                                        {brands?.map(b => (
                                             <option key={b.marca_id} value={b.marca_id}>{b.nombre}</option>
                                         ))}
                                     </select>

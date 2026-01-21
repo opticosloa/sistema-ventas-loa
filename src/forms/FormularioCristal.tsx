@@ -70,6 +70,22 @@ export const FormularioCristal: React.FC = () => {
         }
     }, [form.precio_costo, form.porcentaje_ganancia, isManualPrice]);
 
+    // Reverse Calculator Logic (Price -> Margin)
+    useEffect(() => {
+        if (!isManualPrice) return;
+
+        const costo = parseFloat(form.precio_costo);
+        const venta = parseFloat(form.precio_usd);
+
+        if (!isNaN(costo) && costo > 0 && !isNaN(venta) && venta > 0) {
+            const margen = ((venta / costo) - 1) * 100;
+            setForm(prev => ({
+                ...prev,
+                porcentaje_ganancia: margen.toFixed(2)
+            }));
+        }
+    }, [form.precio_usd, isManualPrice, form.precio_costo]);
+
 
     // Simplificamos el cambio: guardamos el valor tal cual viene del input
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -110,6 +126,18 @@ export const FormularioCristal: React.FC = () => {
         const [esfMin, esfMax] = [esfMinVal, esfMaxVal].sort((a, b) => a - b);
         const [cilMin, cilMax] = [cilMinVal, cilMaxVal].sort((a, b) => a - b);
 
+        // Validations
+        const stockInitial = parseInt(form.stock_inicial) || 0;
+        const precioUsd = parseFloat(form.precio_usd) || 0;
+
+        if (stockInitial <= 0) {
+            return Swal.fire('Error', 'El Stock Inicial debe ser mayor a 0', 'error');
+        }
+
+        if (precioUsd <= 0) {
+            return Swal.fire('Error', 'El Precio de Venta (USD) debe ser mayor a 0', 'error');
+        }
+
         const finalPayload = {
             material: form.material,
             tratamiento: form.tratamiento,
@@ -117,9 +145,9 @@ export const FormularioCristal: React.FC = () => {
             esfera_max: esfMax,
             cilindro_min: cilMin,
             cilindro_max: cilMax,
-            precio_usd: parseFloat(form.precio_usd) || 0,
+            precio_usd: precioUsd,
             precio_costo: parseFloat(form.precio_costo) || 0,
-            stock_inicial: parseInt(form.stock_inicial) || 0,
+            stock_inicial: stockInitial,
             stock_minimo: parseInt(form.stock_minimo) || 2,
             ubicacion: form.ubicacion
         };

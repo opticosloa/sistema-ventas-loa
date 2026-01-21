@@ -38,33 +38,71 @@ export const BotonEscanearDNI: React.FC<BotonEscanearDNIProps> = ({ onScanComple
                 // Configuraciones del scanner
                 const formatsToSupport = [Html5QrcodeSupportedFormats.PDF_417];
                 const config = {
-                    fps: 10,
+                    fps: 30, // Más fluido
                     qrbox: { width: 300, height: 150 }, // Caja rectangular para DNI
                     aspectRatio: 1.0,
-                    formatsToSupport: formatsToSupport
+                    formatsToSupport: formatsToSupport,
+                    videoConstraints: {
+                        facingMode: "environment",
+                        width: { min: 1280, ideal: 1920 },
+                        height: { min: 720, ideal: 1080 }
+                    }
                 };
 
                 scannerRef.current = new Html5Qrcode(regionId);
 
-                await scannerRef.current.start(
-                    { facingMode: "environment" }, // Preferir cámara trasera
-                    config,
-                    (decodedText) => {
-                        // Success callback
-                        handleScanSuccess(decodedText);
-                    },
-                    (errorMessage) => {
-                        // Error callback (scanning failure per frame is common, ignore unless critical)
-                        if (!errorMessage.includes("NotFoundException")) {
-                            console.warn("⚠️ Incidencia del scanner:", errorMessage);
+                // Función auxiliar para intentar iniciar el scanner con diferentes configuraciones
+                const tryStartScanner = async (constraints: MediaTrackConstraints, attemptName: string) => {
+                    console.log(`Intentando iniciar cámara (${attemptName})...`, constraints);
+                    await scannerRef.current?.start(
+                        constraints,
+                        config,
+                        (decodedText) => {
+                            handleScanSuccess(decodedText);
+                        },
+                        (_errorMessage) => {
+                            // Ignorar errores de frame si no son críticos
+                        }
+                    );
+                };
+
+                try {
+                    // Intento 1: Cámara trasera, Alta Resolución
+                    // NOTA: Pasamos las constraints directamente en el primer argumento
+                    await tryStartScanner(
+                        {
+                            facingMode: "environment",
+                            width: { min: 1280, ideal: 1920 },
+                            height: { min: 720, ideal: 1080 }
+                        },
+                        "Alta Resolución"
+                    );
+                } catch (errHighRes) {
+                    console.warn("Fallo intento Alta Resolución, probando configuración estándar...", errHighRes);
+                    try {
+                        // Intento 2: Cámara trasera, sin forzar resolución (dejar que decida el navegador/librería)
+                        await tryStartScanner(
+                            { facingMode: "environment" },
+                            "Estándar Trasera"
+                        );
+                    } catch (errStandard) {
+                        console.warn("Fallo intento Estándar Trasera, probando cámara por defecto...", errStandard);
+                        try {
+                            // Intento 3: Cualquier cámara (fallback final)
+                            await tryStartScanner(
+                                { facingMode: "user" }, // O simplemente {} vacio si facingMode falla
+                                "Cámara Frontal/Defecto"
+                            );
+                        } catch (errFinal) {
+                            throw errFinal; // Si falla todo, lanzar error
                         }
                     }
-                );
+                }
 
             } catch (err: any) {
-                console.error("Error iniciando cámara:", err);
-                setError("No se pudo acceder a la cámara. Verifique permisos.");
-                setIsScanning(false);
+                console.error("Error fatal iniciando cámara:", err);
+                setError("No se pudo acceder a la cámara. Verifique permisos y hardware.");
+                // No ocultamos el modal inmediatamente para que el usuario vea el error
             }
         }, 100);
     };

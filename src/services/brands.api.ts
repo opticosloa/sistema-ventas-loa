@@ -8,7 +8,7 @@ export interface Brand {
 
 export const getBrands = async (): Promise<Brand[]> => {
     const { data } = await LOAApi.get('/api/brands');
-    return data.result.rows;
+    return data.result.rows || data.result;
 };
 
 export const createBrand = async (brand: Omit<Brand, 'marca_id'>): Promise<Brand> => {
