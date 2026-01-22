@@ -314,9 +314,9 @@ export const FormularioDeEntregaTicket: React.FC = () => {
         if (!searchTerm) return tickets;
         const lower = searchTerm.toLowerCase();
         return tickets.filter(t =>
-            t.cliente_nombre.toLowerCase().includes(lower) ||
-            t.cliente_apellido.toLowerCase().includes(lower) ||
-            t.ticket_id.includes(lower)
+            (t.cliente_nombre || '').toLowerCase().includes(lower) ||
+            (t.ticket_id || '').toLowerCase().includes(lower) ||
+            (t.venta_id || '').toLowerCase().includes(lower)
         );
     }, [tickets, searchTerm]);
 
