@@ -340,33 +340,69 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
 
     // ACTIVE ID REF: To ignore any payment status update that isn't the one we just started
     const activePaymentId = useRef<string | null>(null);
+    const pollingIntervalRef = useRef<any>(null);
+
+    // Cleanup when ventaId changes or unmount
+    useEffect(() => {
+        return () => {
+            if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+        };
+    }, []);
+
+    // Reset Async State when Venta ID changes (prevents ghost polling)
+    useEffect(() => {
+        // Clear any running interval
+        if (pollingIntervalRef.current) {
+            clearInterval(pollingIntervalRef.current);
+            pollingIntervalRef.current = null;
+        }
+
+        // Reset states
+        setAsyncPaymentStatus('IDLE');
+        setQrData(null);
+        setPointStatus("");
+        activePaymentId.current = null;
+    }, [ventaId]); // Strict dependency on ventaId
 
     // Polling Effect
     useEffect(() => {
-        let interval: any;
         let safetyTimeout: any;
 
         if (asyncPaymentStatus !== 'IDLE' && ventaId) {
-            interval = setInterval(() => {
+            // Clear previous if any (just in case)
+            if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+
+            pollingIntervalRef.current = setInterval(() => {
                 checkPaymentStatus();
             }, 3000);
 
             safetyTimeout = setTimeout(() => {
                 setAsyncPaymentStatus((currentStatus) => {
                     if (currentStatus !== 'IDLE') {
-                        clearInterval(interval);
+                        if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
                         setLoading(false);
                         Swal.fire("Tiempo agotado", "Tiempo de espera agotado. Verifique el dispositivo.", "warning");
                         return 'IDLE';
                     }
                     return currentStatus;
                 });
-            }, 600000);
+            }, 600000); // 10 minutes
+        } else {
+            // If IDLE, stop polling
+            if (pollingIntervalRef.current) {
+                clearInterval(pollingIntervalRef.current);
+                pollingIntervalRef.current = null;
+            }
         }
 
         return () => {
-            if (interval) clearInterval(interval);
             if (safetyTimeout) clearTimeout(safetyTimeout);
+            // We don't clear interval here because we want it to persist across re-renders unless status changes
+            // But actually, if status changes (e.g. to IDLE), the effect re-runs and hits the 'else' block or the cleanup.
+            // Safest to clear on unmount of effect if status changed away from meaningful.
+            if (asyncPaymentStatus === 'IDLE' && pollingIntervalRef.current) {
+                clearInterval(pollingIntervalRef.current);
+            }
         };
     }, [asyncPaymentStatus, ventaId]);
 
@@ -378,10 +414,12 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
 
                 if (Array.isArray(backendPagosList)) {
                     // 1. BUSCAMOS SOLO EL PAGO QUE ESTAMOS ESPERANDO
-                    // Si no tenemos ID activo, no filtramos nada específico (o podríamos ignorar todo, depende la lógica deseada)
-                    // En este caso, si hay activePaymentId, lo priorizamos.
                     if (activePaymentId.current) {
-                        const pagoActual = backendPagosList.find((p: any) => p.pago_id === activePaymentId.current);
+                        // STRICT STRING COMPARISON for IDs
+                        const pagoActual = backendPagosList.find((p: any) =>
+                            String(p.pago_id) === String(activePaymentId.current) ||
+                            String(p.external_reference) === String(activePaymentId.current)
+                        );
 
                         if (pagoActual) {
                             console.log(`📊 Monitoreando Pago Activo (${pagoActual.pago_id}): ${pagoActual.estado}`);
@@ -392,17 +430,20 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
                                 setAsyncPaymentStatus('IDLE');
                                 setLoading(false);
                                 activePaymentId.current = null; // Limpiamos
+                                if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
                                 Swal.fire("Pago No Realizado", "El pago fue rechazado o cancelado en la plataforma.", "error");
                                 return;
                             }
 
                             // 3. APROBADO
+                            // VALIDACION ESTRICTA: Solo si es approved/confirmed
                             if ((pagoActual.estado === 'APROBADO' || pagoActual.estado === 'CONFIRMADO') && asyncPaymentStatus !== 'IDLE') {
                                 console.log("✅ El pago activo fue aprobado.");
                                 fetchExistingPayments(ventaId); // Refrescar lista general
                                 setAsyncPaymentStatus('IDLE');
                                 setLoading(false);
                                 activePaymentId.current = null; // Limpiamos
+                                if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
                                 Swal.fire("¡Éxito!", "Pago recibido correctamente.", "success");
                                 return;
                             }
@@ -423,7 +464,6 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
                     // Re-calculate totals from fresh data
                     const freshTotalPaid = mapped.reduce((acc: number, p: any) => acc + (p.confirmed ? p.monto : 0), 0);
                     if (freshTotalPaid !== totalPagado) {
-                        // Si hubo cualquier cambio en los montos (ej: pago parcial en otra caja), actualizamos la UI
                         setPagos(mapped);
                     }
                 }
