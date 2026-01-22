@@ -3,7 +3,7 @@ import LOAApi from '../api/LOAApi';
 const API_URL = '/api/cash';
 
 export interface VentaCaja {
-    id: string;
+    venta_id: string;
     fecha: string;
     total: number;
     cliente_nombre: string;
@@ -13,8 +13,10 @@ export interface VentaCaja {
 export interface CashSummary {
     total_efectivo: number;
     total_electronico: number;
+    total_obra_social: number;
     total_general: number;
     detalle_ventas: VentaCaja[];
+    detalle_obras_sociales: { nombre_os: string; total: number }[];
 }
 
 export interface CloseResponse {

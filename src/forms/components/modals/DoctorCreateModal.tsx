@@ -30,7 +30,7 @@ export const DoctorCreateModal: React.FC<DoctorCreateModalProps> = ({ isOpen, on
                 setFormData({
                     nombre: doctorToEdit.nombre || '',
                     matricula: doctorToEdit.matricula || '',
-                    especialidad: doctorToEdit.especialidad || '',
+                    especialidad: doctorToEdit.especialidad || 'Oftalmología',
                     telefono: doctorToEdit.telefono || '',
                     email: doctorToEdit.email || ''
                 });

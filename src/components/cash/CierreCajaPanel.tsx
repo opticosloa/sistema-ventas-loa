@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { CashService, type CashSummary } from '../../services/cash.service';
 import Swal from 'sweetalert2';
 import { formatCurrency } from '../../helpers/currency';
+import { DesgloseCobrosOS } from './DesgloseCobrosOS';
 
 export const CierreCajaPanel = () => {
     const [summary, setSummary] = useState<CashSummary | null>(null);
@@ -9,6 +10,7 @@ export const CierreCajaPanel = () => {
     const [efectivoReal, setEfectivoReal] = useState<string>(''); // String to handle empty input
     const [observaciones, setObservaciones] = useState('');
     const [calculating, setCalculating] = useState(false);
+    const [generarLiquidaciones, setGenerarLiquidaciones] = useState(true);
 
     useEffect(() => {
         fetchSummary();
@@ -31,19 +33,28 @@ export const CierreCajaPanel = () => {
         if (!summary) return;
 
         const efectivoNum = parseFloat(efectivoReal) || 0;
-        const totalToSend = efectivoNum + Number(summary.total_electronico);
+        // El total a enviar suele ser el arqueo real total, pero el backend pide "monto_real".
+        // Si el backend espera el monto total real (efectivo real + otros medios), deberiamos sumarlo.
+        // Usualmente "monto_real" en cierre se refiere a lo que hay en caja fisica (Efectivo).
+        // Sin embargo, si el SP calcula diferencia = monto_real - monto_sistema, y monto_sistema incluye todo...
+        // ENTONCES monto_real debe incluir todo.
+        // Ajuste: Monto Real = Efectivo Real + Electronico (Sistema) + OS (Sistema).
+        // Asumimos que lo electronico y OS siempre coincide porque no es tangible.
+        const totalToSend = efectivoNum + Number(summary.total_electronico) + Number(summary.total_obra_social);
         const diferencia = efectivoNum - Number(summary.total_efectivo);
 
         const result = await Swal.fire({
             title: '¿Confirmar Cierre?',
             html: `
-                <p class="text-left"><strong>Sistema Efectivo:</strong> ${formatCurrency(summary.total_efectivo)}</p>
-                <p class="text-left"><strong>Real Efectivo:</strong> ${formatCurrency(efectivoNum)}</p>
-                <p class="text-left text-lg font-bold ${diferencia < 0 ? 'text-red-500' : 'text-green-500'}">
-                    Diferencia: ${formatCurrency(diferencia)}
-                </p>
-                <br/>
-                <p class="text-sm text-gray-500">Se guardará el cierre y se reiniciará la caja.</p>
+                <div class="text-left space-y-2">
+                    <p><strong>Sistema Efectivo:</strong> ${formatCurrency(summary.total_efectivo)}</p>
+                    <p><strong>Real Efectivo:</strong> ${formatCurrency(efectivoNum)}</p>
+                    <p class="text-lg font-bold ${diferencia < 0 ? 'text-red-500' : 'text-green-500'}">
+                        Diferencia Efectivo: ${formatCurrency(diferencia)}
+                    </p>
+                    ${generarLiquidaciones && summary.total_obra_social > 0 ?
+                    '<p class="text-sm text-blue-600 font-semibold mt-2">✨ Se generarán borradores de liquidación automáticamente.</p>' : ''}
+                </div>
             `,
             icon: 'warning',
             showCancelButton: true,
@@ -54,10 +65,17 @@ export const CierreCajaPanel = () => {
         if (result.isConfirmed) {
             setCalculating(true);
             try {
+                // Se envia el total calculado. La generacion de liquidaciones es automatica en backend si hay OS.
                 const response = await CashService.performClosing(totalToSend, observaciones);
+
+                let msgExito = `Diferencia total registrada: ${formatCurrency(response.diferencia)}`;
+                if (generarLiquidaciones && summary.total_obra_social > 0) {
+                    msgExito += `<br/><br/><b>✅ Liquidaciones generadas en borrador.</b>`;
+                }
+
                 await Swal.fire({
                     title: '¡Caja Cerrada!',
-                    text: `Diferencia total registrada: ${formatCurrency(response.diferencia)}`,
+                    html: msgExito,
                     icon: 'success'
                 });
                 setSummary(null);
@@ -84,24 +102,31 @@ export const CierreCajaPanel = () => {
             <h1 className="text-3xl font-bold mb-6 text-gray-800 dark:text-white">Cierre de Caja</h1>
 
             {/* Cards Summary */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md border-l-4 border-blue-500">
-                    <p className="text-gray-500 dark:text-gray-400 text-sm uppercase font-semibold">Total Efectivo (Sistema)</p>
-                    <p className="text-3xl font-bold text-gray-800 dark:text-white mt-2">
+                    <p className="text-gray-500 dark:text-gray-400 text-xs uppercase font-semibold">Efectivo (Sistema)</p>
+                    <p className="text-2xl font-bold text-gray-800 dark:text-white mt-1">
                         {formatCurrency(summary.total_efectivo)}
                     </p>
                 </div>
 
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md border-l-4 border-purple-500">
-                    <p className="text-gray-500 dark:text-gray-400 text-sm uppercase font-semibold">Total Electrónicos</p>
-                    <p className="text-3xl font-bold text-gray-800 dark:text-white mt-2">
+                    <p className="text-gray-500 dark:text-gray-400 text-xs uppercase font-semibold">Electrónicos</p>
+                    <p className="text-2xl font-bold text-gray-800 dark:text-white mt-1">
                         {formatCurrency(summary.total_electronico)}
                     </p>
                 </div>
 
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md border-l-4 border-orange-500">
+                    <p className="text-gray-500 dark:text-gray-400 text-xs uppercase font-semibold">Obras Sociales</p>
+                    <p className="text-2xl font-bold text-gray-800 dark:text-white mt-1">
+                        {formatCurrency(summary.total_obra_social || 0)}
+                    </p>
+                </div>
+
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md border-l-4 border-green-500">
-                    <p className="text-gray-500 dark:text-gray-400 text-sm uppercase font-semibold">Total General (Sistema)</p>
-                    <p className="text-3xl font-bold text-gray-800 dark:text-white mt-2">
+                    <p className="text-gray-500 dark:text-gray-400 text-xs uppercase font-semibold">Total General</p>
+                    <p className="text-2xl font-bold text-gray-800 dark:text-white mt-1">
                         {formatCurrency(summary.total_general)}
                     </p>
                 </div>
@@ -109,7 +134,7 @@ export const CierreCajaPanel = () => {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 {/* Input Section */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg">
+                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg h-fit">
                     <h2 className="text-xl font-bold mb-4 text-gray-700 dark:text-gray-200">Arqueo de Caja</h2>
 
                     <div className="mb-4">
@@ -127,7 +152,7 @@ export const CierreCajaPanel = () => {
 
                     <div className={`p-4 rounded-lg mb-6 ${diffEfectivo < 0 ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'}`}>
                         <div className="flex justify-between items-center">
-                            <span className="font-semibold">Diferencia (Contra Efectivo Sistema):</span>
+                            <span className="font-semibold">Diferencia (Efectivo):</span>
                             <span className="text-2xl font-bold">{diffEfectivo > 0 ? '+' : ''}{formatCurrency(diffEfectivo)}</span>
                         </div>
                     </div>
@@ -145,6 +170,22 @@ export const CierreCajaPanel = () => {
                         />
                     </div>
 
+                    {summary.total_obra_social > 0 && (
+                        <div className="mb-6 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg flex items-start gap-3">
+                            <input
+                                type="checkbox"
+                                id="genLiquidacion"
+                                checked={generarLiquidaciones}
+                                onChange={(e) => setGenerarLiquidaciones(e.target.checked)}
+                                className="mt-1 w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
+                            />
+                            <label htmlFor="genLiquidacion" className="text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+                                <span className="font-bold block">Generar borradores de liquidación para Obras Sociales</span>
+                                Se crearán registros en estado 'BORRADOR' para facilitar el cobro futuro.
+                            </label>
+                        </div>
+                    )}
+
                     <button
                         onClick={handleClose}
                         disabled={calculating || summary.total_general === 0}
@@ -160,43 +201,51 @@ export const CierreCajaPanel = () => {
                     )}
                 </div>
 
-                {/* Sales List */}
-                <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg overflow-hidden">
-                    <h2 className="text-xl font-bold mb-4 text-gray-700 dark:text-gray-200">
-                        Ventas Pendientes ({summary.detalle_ventas.length})
-                    </h2>
-                    <div className="overflow-y-auto max-h-[500px]">
-                        <table className="w-full text-left">
-                            <thead className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 uppercase text-xs">
-                                <tr>
-                                    <th className="p-3">Hora</th>
-                                    <th className="p-3">Cliente</th>
-                                    <th className="p-3 text-right">Total</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                                {summary.detalle_ventas.map((venta) => (
-                                    <tr key={venta.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                        <td className="p-3 text-sm text-gray-600 dark:text-gray-400">
-                                            {new Date(venta.fecha).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                        </td>
-                                        <td className="p-3 text-sm font-medium text-gray-800 dark:text-gray-200">
-                                            {venta.cliente_nombre}
-                                        </td>
-                                        <td className="p-3 text-sm font-bold text-gray-800 dark:text-white text-right">
-                                            {formatCurrency(venta.total)}
-                                        </td>
-                                    </tr>
-                                ))}
-                                {summary.detalle_ventas.length === 0 && (
+                {/* Sales List & OS Breakdown */}
+                <div className="space-y-6">
+                    {/* OS Breakdown */}
+                    {summary.detalle_obras_sociales && summary.detalle_obras_sociales.length > 0 && (
+                        <DesgloseCobrosOS data={summary.detalle_obras_sociales} />
+                    )}
+
+                    {/* Sales Table */}
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg overflow-hidden">
+                        <h2 className="text-xl font-bold mb-4 text-gray-700 dark:text-gray-200">
+                            Ventas Pendientes ({summary.detalle_ventas.length})
+                        </h2>
+                        <div className="overflow-y-auto max-h-[400px]">
+                            <table className="w-full text-left">
+                                <thead className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 uppercase text-xs">
                                     <tr>
-                                        <td colSpan={3} className="p-4 text-center text-gray-500">
-                                            Sin ventas pendientes.
-                                        </td>
+                                        <th className="p-3">Hora</th>
+                                        <th className="p-3">Cliente</th>
+                                        <th className="p-3 text-right">Total</th>
                                     </tr>
-                                )}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                                    {summary.detalle_ventas.map((venta) => (
+                                        <tr key={venta.venta_id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                            <td className="p-3 text-sm text-gray-600 dark:text-gray-400">
+                                                {new Date(venta.fecha).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                            </td>
+                                            <td className="p-3 text-sm font-medium text-gray-800 dark:text-gray-200">
+                                                {venta.cliente_nombre}
+                                            </td>
+                                            <td className="p-3 text-sm font-bold text-gray-800 dark:text-white text-right">
+                                                {formatCurrency(venta.total)}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {summary.detalle_ventas.length === 0 && (
+                                        <tr>
+                                            <td colSpan={3} className="p-4 text-center text-gray-500">
+                                                Sin ventas pendientes.
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>

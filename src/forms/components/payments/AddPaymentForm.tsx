@@ -11,8 +11,8 @@ interface AddPaymentFormProps {
     currentTotal: number;
     // Props for Obra Social
     obrasSociales?: ObraSocial[];
-    selectedObraSocialId?: number | '';
-    setSelectedObraSocialId?: (id: number | '') => void;
+    selectedObraSocialId?: string | '';
+    setSelectedObraSocialId?: (id: string | '') => void;
     nroOrden?: string;
     setNroOrden?: (val: string) => void;
     onCoverInsurance?: () => void;
@@ -37,9 +37,9 @@ export const AddPaymentForm: React.FC<AddPaymentFormProps> = ({
     setSelectedObraSocialId,
     nroOrden = '',
     setNroOrden,
-    onCoverInsurance
+    // onCoverInsurance
 }) => {
-    const selectedOS = obrasSociales.find(os => os.obra_social_id === Number(selectedObraSocialId));
+    const selectedOS = obrasSociales.find(os => os.obra_social_id === selectedObraSocialId);
     return (
         <>
             <h3 className="text-lg font-medium mb-4">Agregar Método</h3>
@@ -70,7 +70,7 @@ export const AddPaymentForm: React.FC<AddPaymentFormProps> = ({
                         <label className="block text-sm text-gray-300 mb-1">Seleccionar Obra Social</label>
                         <select
                             value={selectedObraSocialId}
-                            onChange={(e) => setSelectedObraSocialId && setSelectedObraSocialId(Number(e.target.value) || '')}
+                            onChange={(e) => setSelectedObraSocialId && setSelectedObraSocialId(e.target.value)}
                             className="input w-full"
                         >
                             <option value="">Seleccione...</option>
@@ -113,6 +113,7 @@ export const AddPaymentForm: React.FC<AddPaymentFormProps> = ({
                         />
                     </div>
 
+                    {/* COMENTADO POR SOLICITUD DEL USUARIO: CALCULO AUTOMATICO PENDIENTE DE DATOS
                     {onCoverInsurance && (
                         <button
                             type="button"
@@ -127,6 +128,10 @@ export const AddPaymentForm: React.FC<AddPaymentFormProps> = ({
                     <p className="text-xs text-gray-400 text-center">
                         Calcula automáticamente el total de items ópticos.
                     </p>
+                    */}
+                    <div className="bg-yellow-900/30 p-2 rounded border border-yellow-700/50 text-yellow-200 text-xs text-center">
+                        Ingrese el monto cubierto manualmente abajo 👇
+                    </div>
                 </div>
             )}
 
@@ -147,7 +152,12 @@ export const AddPaymentForm: React.FC<AddPaymentFormProps> = ({
             <button
                 type="button"
                 onClick={handleAddPayment}
-                disabled={!selectedMethod || parseFloat(amountInput) <= 0 || currentTotal <= 0}
+                disabled={
+                    !selectedMethod ||
+                    parseFloat(amountInput) <= 0 ||
+                    currentTotal <= 0 ||
+                    (selectedMethod === 'OBRA_SOCIAL' && !nroOrden?.trim())
+                }
                 className={`btn-secondary w-full mb-auto ${currentTotal <= 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
                 Agregar Pago

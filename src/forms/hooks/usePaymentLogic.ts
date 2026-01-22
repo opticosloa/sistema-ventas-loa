@@ -1,17 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Swal from 'sweetalert2';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import LOAApi from '../../api/LOAApi';
 import type { MetodoPago, PagoParcial } from '../../types/Pago';
 import type { ObraSocial } from '../../types/ObrasSociales';
 import type { CartItem } from '../components/SalesItemsList';
+import { useAppSelector } from '../../hooks';
 
 export interface UsePaymentLogicReturn {
     ventaId: string | number | null;
     currentTotal: number;
     totalPagado: number;
     restante: number;
-    pagos: (PagoParcial & { estado?: string })[];
+    pagos: (PagoParcial & { estado?: string, referencia?: string })[];
     loading: boolean;
     saleItems: CartItem[];
 
@@ -58,22 +59,29 @@ export interface UsePaymentLogicReturn {
 
     // Obras Sociales
     obrasSociales: ObraSocial[];
-    selectedObraSocialId: number | '';
-    setSelectedObraSocialId: (id: number | '') => void;
+    selectedObraSocialId: string | '';
+    setSelectedObraSocialId: (id: string | '') => void;
     nroOrden: string;
     setNroOrden: (val: string) => void;
     handleCoverInsurance: () => void;
 }
 
-export const usePaymentLogic = (): UsePaymentLogicReturn => {
+export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLogicReturn => {
     const { ventaId: paramVentaId } = useParams<{ ventaId: string }>();
     const navigate = useNavigate();
     const location = useLocation();
+    const { uid } = useAppSelector(state => state.auth);
     const stateVentaId = location.state?.ventaId;
     const stateTotal = location.state?.total;
 
     /* New States */
-    const [ventaId, setVentaId] = useState<string | number | null>(paramVentaId || stateVentaId || null);
+    const [ventaId, setVentaId] = useState<string | number | null>(overrideVentaId || paramVentaId || stateVentaId || null);
+    const [clientId, setClientId] = useState<string | null>(null);
+
+    // Update ventaId if override changes
+    useEffect(() => {
+        if (overrideVentaId) setVentaId(overrideVentaId);
+    }, [overrideVentaId]);
     const [saleItems, setSaleItems] = useState<any[]>([]);
     const [dniSearch, setDniSearch] = useState("");
     const [currentTotal, setCurrentTotal] = useState<number>(stateTotal ? parseFloat(stateTotal) : 0);
@@ -155,6 +163,9 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
                     // IMPORTANTE: Seteamos el total neto para el cobro
                     setCurrentTotal(finalTotal);
 
+                    // Setar Cliente (para crear ticket)
+                    if (sale.cliente_id) setClientId(sale.cliente_id);
+
                     if (sale.items && Array.isArray(sale.items)) {
                         const mappedItems = sale.items.map((item: any) => ({
                             producto: {
@@ -200,6 +211,12 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
         } catch (error) {
             console.error("Error fetching payments", error);
         }
+    };
+
+    const openLabOrderPdf = (id: string | number) => {
+        if (!id) return;
+        const url = `${LOAApi.defaults.baseURL}/api/sales/${id}/laboratory-order`;
+        window.open(url, '_blank');
     };
 
     const handleSearchDni = async () => {
@@ -251,7 +268,7 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
     };
 
     // State
-    const [pagos, setPagos] = useState<(PagoParcial & { estado?: string })[]>([]);
+    const [pagos, setPagos] = useState<(PagoParcial & { estado?: string, referencia?: string })[]>([]);
     const [loading, setLoading] = useState(false);
 
     // Form State for new payment
@@ -259,7 +276,7 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
     const [amountInput, setAmountInput] = useState<string>('');
 
     // Form State for Obras Sociales
-    const [selectedObraSocialId, setSelectedObraSocialId] = useState<number | ''>('');
+    const [selectedObraSocialId, setSelectedObraSocialId] = useState<string | ''>('');
     const [nroOrden, setNroOrden] = useState<string>('');
 
     // Calculations
@@ -283,9 +300,25 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
             return;
         }
 
-        setPagos([...pagos, { metodo: selectedMethod, monto: amount, confirmed: true, readonly: false }]); // Manuales nuevos asumimos 'confirmed' visualmente para restar
+        let referenciaStr = '';
+        if (selectedMethod === 'OBRA_SOCIAL') {
+            referenciaStr = `ID_OS: ${selectedObraSocialId} | ORD: ${nroOrden}`;
+        }
+
+        setPagos([...pagos, {
+            metodo: selectedMethod,
+            monto: amount,
+            confirmed: true,
+            readonly: false,
+            referencia: referenciaStr
+        }]); // Manuales nuevos asumimos 'confirmed' visualmente para restar
         // Reset inputs
         setSelectedMethod('');
+        // Reset OS specific
+        if (selectedMethod === 'OBRA_SOCIAL') {
+            setNroOrden('');
+            setSelectedObraSocialId('');
+        }
         setAmountInput((restante - amount).toFixed(2));
     };
 
@@ -304,6 +337,9 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
     const [asyncPaymentStatus, setAsyncPaymentStatus] = useState<'IDLE' | 'WAITING_POINT' | 'SHOWING_QR'>('IDLE');
     const [qrData, setQrData] = useState<string | null>(null);
     const [pointStatus, setPointStatus] = useState<string>("");
+
+    // ACTIVE ID REF: To ignore any payment status update that isn't the one we just started
+    const activePaymentId = useRef<string | null>(null);
 
     // Polling Effect
     useEffect(() => {
@@ -340,70 +376,53 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
             if (data.success && data.result) {
                 const { pagos: backendPagosList } = data.result;
 
-                // REFRESH LIST
                 if (Array.isArray(backendPagosList)) {
+                    // 1. BUSCAMOS SOLO EL PAGO QUE ESTAMOS ESPERANDO
+                    // Si no tenemos ID activo, no filtramos nada específico (o podríamos ignorar todo, depende la lógica deseada)
+                    // En este caso, si hay activePaymentId, lo priorizamos.
+                    if (activePaymentId.current) {
+                        const pagoActual = backendPagosList.find((p: any) => p.pago_id === activePaymentId.current);
 
-                    const pagoRechazadoReciente = backendPagosList.find((p: any) => {
-                        // Solo nos interesan los RECHAZADOS o CANCELADOS para este debug
-                        if (p.estado !== 'RECHAZADO' && p.estado !== 'CANCELLED') return false;
+                        if (pagoActual) {
+                            console.log(`📊 Monitoreando Pago Activo (${pagoActual.pago_id}): ${pagoActual.estado}`);
 
-                        const fechaPagoObj = new Date(p.created_at);
-                        const fechaPago = fechaPagoObj.getTime();
-                        const ahoraObj = new Date();
-                        const ahora = ahoraObj.getTime();
+                            // 2. RECHAZADO / CANCELADO
+                            if ((pagoActual.estado === 'RECHAZADO' || pagoActual.estado === 'CANCELLED') && asyncPaymentStatus !== 'IDLE') {
+                                console.log("❌ El pago activo fue rechazado/cancelado.");
+                                setAsyncPaymentStatus('IDLE');
+                                setLoading(false);
+                                activePaymentId.current = null; // Limpiamos
+                                Swal.fire("Pago No Realizado", "El pago fue rechazado o cancelado en la plataforma.", "error");
+                                return;
+                            }
 
-                        // FIX: Usamos diferencia absoluta en horas
-                        const diferenciaMinutos = Math.abs(ahora - fechaPago) / (1000 * 60);
-
-                        // --- [LOGS CRÍTICOS AQUÍ] ---
-                        console.group(`🔍 Analizando Pago ID: ${p.pago_id}`);
-                        console.log(`Estado: ${p.estado}`);
-                        console.log(`String DB (created_at):`, p.created_at);
-                        console.log(`Browser Parse (fechaPago):`, fechaPagoObj.toString());
-                        console.log(`Browser Actual (ahora):`, ahoraObj.toString());
-                        console.log(`Cálculo: |${ahora} - ${fechaPago}| / 60000`);
-                        console.log(`Resultado Diferencia Minutos: ${diferenciaMinutos}`);
-                        console.log(`¿Es menor a 10?:`, diferenciaMinutos < 10);
-                        console.groupEnd();
-                        // -----------------------------
-
-                        return diferenciaMinutos < 10;
-                    });
-
-                    // Si encontramos un rechazo reciente y el modal está abierto, lo cerramos
-                    if (pagoRechazadoReciente && asyncPaymentStatus !== 'IDLE') {
-                        console.log("✅ CONDICIÓN CUMPLIDA: Cerrando modal por rechazo.");
-                        setAsyncPaymentStatus('IDLE');
-                        setLoading(false);
-                        Swal.fire("Rechazado", "❌ El pago fue rechazado recientemente. Por favor, intente con otra tarjeta.", "error");
-                        return;
+                            // 3. APROBADO
+                            if ((pagoActual.estado === 'APROBADO' || pagoActual.estado === 'CONFIRMADO') && asyncPaymentStatus !== 'IDLE') {
+                                console.log("✅ El pago activo fue aprobado.");
+                                fetchExistingPayments(ventaId); // Refrescar lista general
+                                setAsyncPaymentStatus('IDLE');
+                                setLoading(false);
+                                activePaymentId.current = null; // Limpiamos
+                                Swal.fire("¡Éxito!", "Pago recibido correctamente.", "success");
+                                return;
+                            }
+                        }
+                        // Si no lo encontramos, seguimos esperando...
                     }
-                    // Check if we have a NEW confirmed payment
-                    backendPagosList.some((p: any) =>
-                        (p.estado === 'APROBADO' || p.estado === 'CONFIRMADO') &&
-                        !pagos.some(local => local.confirmed && local.monto === parseFloat(p.monto) && local.metodo === p.metodo) // Weak check but sufficient for now
-                    );
 
+                    // --- MANTENER LOGICA DE REFRESCO GENERAL ---
                     const mapped = backendPagosList.map((p: any) => ({
                         metodo: p.metodo,
                         monto: parseFloat(p.monto),
                         confirmed: p.estado === 'APROBADO' || p.estado === 'CONFIRMADO',
                         readonly: true,
-                        estado: p.estado
+                        estado: p.estado,
+                        created_at: p.created_at
                     }));
 
                     // Re-calculate totals from fresh data
                     const freshTotalPaid = mapped.reduce((acc: number, p: any) => acc + (p.confirmed ? p.monto : 0), 0);
-
-                    const mpPaymentApproved = mapped.find(p => p.metodo.startsWith('MP') && p.confirmed);
-
-                    if (mpPaymentApproved && (asyncPaymentStatus === 'SHOWING_QR' || asyncPaymentStatus === 'WAITING_POINT')) {
-                        // ¡Éxito! Encontramos un pago MP aprobado mientras mostrábamos el QR
-                        setPagos(mapped);
-                        setAsyncPaymentStatus('IDLE');
-                        setLoading(false);
-                        // Opcional: Toast de éxito
-                    } else if (freshTotalPaid !== totalPagado) {
+                    if (freshTotalPaid !== totalPagado) {
                         // Si hubo cualquier cambio en los montos (ej: pago parcial en otra caja), actualizamos la UI
                         setPagos(mapped);
                     }
@@ -418,17 +437,86 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
         if (e) e.preventDefault();
         if (loading) return;
 
-        // Filter out already confirmed payments (MP, etc)
+        // Reglas de Negocio: Seña Mínima (30%)
+        // 1. Calcular pagos "reales" (No Covertura OS)
+        const pagosReales = pagos.filter(p => p.metodo !== 'OBRA_SOCIAL');
+        const pagosOS = pagos.filter(p => p.metodo === 'OBRA_SOCIAL');
+
+        const totalPagadoReal = pagosReales.reduce((acc, p) => acc + (p.confirmed ? (Number(p.monto) || 0) : 0), 0);
+        const totalPagadoOS = pagosOS.reduce((acc, p) => acc + (p.confirmed ? (Number(p.monto) || 0) : 0), 0);
+
+        // Base para el cliente = Total - lo que cubre la obra social
+        const baseCliente = Math.max(0, currentTotal - totalPagadoOS);
+        const montoMinimo = baseCliente * 0.30;
+
+        // Filter out already confirmed payments (MP, etc) for POST request
         const newPayments = pagos.filter(p => !p.confirmed || !p.readonly);
 
-        if (newPayments.length === 0 && restante > 0.01) {
+        const isFullyPaid = restante <= 0.01;
+        const isMinimoCubierto = totalPagadoReal >= (montoMinimo - 100); // Margen de error $100
+
+        // Si NO está saldo completo Y NO cumple el mínimo -> Validar Supervisor
+        if (!isFullyPaid && !isMinimoCubierto) {
+            // Si hay nuevos pagos pendientes de guardar, advertir que primero se validará
+            Swal.fire({
+                title: 'Seña Insuficiente',
+                html: `El pago mínimo requerido es <b>$${Math.round(montoMinimo)}</b> (30%).<br>Pagado: $${totalPagadoReal}.<br><br>¿Solicitar autorización de Supervisor?`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Solicitar Autorización',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    setSupervisorModalOpen(true);
+                }
+            });
+            return;
+        }
+
+        if (newPayments.length === 0 && restante > 0.01 && !isMinimoCubierto) {
+            // Caso borde: no agrega nada y debe plata
             Swal.fire("Info", "Agregue un pago o verifique el monto.", "info");
             return;
         }
 
         if (newPayments.length === 0 && restante <= 0.01) {
-            Swal.fire("Éxito", "Venta pagada correctamente.", "success");
-            navigate(`/ventas/${ventaId}`);
+            // Caso: Ya está pagado todo (o cubierto por OS)
+            // Simplemente navegar
+            Swal.fire("Éxito", "Venta guardada correctamente.", "success");
+
+            // Crear Ticket si corresponde (aunque si ya estaba paga, quizas ya se dio, pero no esta de mas validar en back)
+            if (ventaId && clientId && uid) {
+                try {
+                    await LOAApi.post('/api/tickets', {
+                        venta_id: ventaId,
+                        cliente_id: clientId,
+                        usuario_id: uid,
+                        fecha_entrega_estimada: new Date(Date.now() + 10000).toISOString(),
+                        notas: 'Ticket generado automáticamente al pagar'
+                    });
+                } catch (e) {
+                    console.error("Error auto-generando ticket", e);
+                }
+            }
+
+            // Intentar abrir PDF si corresponde
+            if (ventaId) openLabOrderPdf(ventaId);
+
+            return navigate(`/nueva-venta`);
+        }
+
+        // Si hay pagos nuevos, los guardamos (aun si es con deuda, si pasó la validación del 30% o fue autorizado externamente - wait, 
+        // if supervisor authorizes, we need to SAVE the payments and proceed.
+        // Currently `supervisorModalOpen` calls `handleSupervisorSuccess`.
+        // We need `handleSupervisorSuccess` to triggering the SAVE.
+
+        // Logic continues...
+        processSale(newPayments);
+    };
+
+    const processSale = async (newPayments: any[]) => {
+        if (newPayments.length === 0 && restante <= 0.01) {
+            navigate(`/nueva-venta`);
             return;
         }
 
@@ -439,15 +527,36 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
                 pagos: newPayments.map(p => ({
                     metodo: p.metodo,
                     monto: p.monto,
-                    referencia: ''
+                    referencia: p.referencia || ''
                 }))
             };
 
-            await LOAApi.post('/api/payments/manual', payload);
+            if (newPayments.length > 0) {
+                await LOAApi.post('/api/payments/manual', payload);
+                Swal.fire("Éxito", "Pagos registrados correctamente", "success");
+            } else {
+                Swal.fire("Éxito", "Venta registrada con deuda", "success");
+            }
 
-            Swal.fire("Éxito", "Pagos registrados correctamente", "success");
+            // CREAR TICKET AUTOMÁTICAMENTE
+            if (ventaId && clientId && uid) {
+                await LOAApi.post('/api/tickets', {
+                    venta_id: ventaId,
+                    cliente_id: clientId,
+                    usuario_id: uid,
+                    fecha_entrega_estimada: new Date(Date.now() + 10000).toISOString(),
+                    notas: 'Ticket generado automáticamente al pagar'
+                });
+            }
+
+            // ABRIR PDF AUTOMATICAMENTE
+            if (ventaId) openLabOrderPdf(ventaId);
+
             fetchExistingPayments(ventaId!.toString());
             setPagos([]);
+
+            // Navigate or stay? Usually navigate to ticket
+            navigate(`/ventas/${ventaId}`);
 
         } catch (error) {
             console.error(error);
@@ -455,11 +564,14 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
         } finally {
             setLoading(false);
         }
-    };
+    }
 
     const startMpQrFlow = async (amount: number) => {
         setLoading(true);
         setPointStatus("");
+        setLoading(true);
+        setPointStatus("");
+        // processStartTime.current = Date.now(); // REMOVED
         try {
             const { data } = await LOAApi.post('/api/payments/mercadopago/dynamic', {
                 total: amount,
@@ -468,9 +580,12 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
             });
 
             if (data.success && data.result?.qr_data) {
+                // GUARDAMOS EL ID ESPECÍFICO DE ESTE PAGO
+                activePaymentId.current = data.result.external_reference || data.result.pago_id;
+
                 setQrData(data.result.qr_data);
                 setAsyncPaymentStatus('SHOWING_QR');
-                setAsyncPaymentStatus('IDLE');
+                // REMOVED: setAsyncPaymentStatus('IDLE');  <-- This was the bug causing instant close
             }
         } catch (e) {
             console.error("MP QR Error:", e);
@@ -485,6 +600,7 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
     const startMpPointFlow = async (amount: number, deviceId: string) => {
         setLoading(true);
         setPointStatus("");
+        // processStartTime.current = Date.now(); // REMOVED
         try {
             if (!deviceId) {
                 setLoading(false);
@@ -494,6 +610,12 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
                 venta_id: ventaId,
                 monto: amount,
                 device_id: deviceId
+            }).then((resp) => {
+                if (resp.data.success) {
+                    // GUARDAMOS EL ID ESPECÍFICO DE ESTE PAGO
+                    activePaymentId.current = resp.data.pago_id;
+                }
+                return resp;
             });
             setPointStatus("Enviado a terminal. Espere...");
             setAsyncPaymentStatus('WAITING_POINT');
@@ -539,16 +661,20 @@ export const usePaymentLogic = (): UsePaymentLogicReturn => {
             setLoading(true);
             // 1. Update observation (Audit)
             await LOAApi.put(`/api/sales/${ventaId}/observation`, {
-                observation: `AUTORIZADO RETIRO SIN PAGO POR: ${supervisorName}`
+                observation: `AUTORIZADO CAJA SIN PAGO MINIMO POR: ${supervisorName}`
             });
 
-            // 2. Navigate to result (Pending status is implicit)
-            navigate(`/ventas/resultado?venta_id=${ventaId}`);
+            setSupervisorModalOpen(false);
+
+            // 2. Proceder a guardar la venta (incluso con deuda)
+            // Recalculamos los pagos pendientes basándonos en el estado actual 'pagos'
+            // que está disponible en el closure. (React garantiza que si 'pagos' cambia, esta función se recrea si está en el dependency array correcto o si el componente se renderiza)
+            const paymentsToSave = pagos.filter(p => !p.confirmed || !p.readonly);
+            await processSale(paymentsToSave);
 
         } catch (error) {
             console.error("Error updating sale observation:", error);
             Swal.fire("Error", "Error al registrar autorización. Intente nuevamente.", "error");
-        } finally {
             setLoading(false);
         }
     };

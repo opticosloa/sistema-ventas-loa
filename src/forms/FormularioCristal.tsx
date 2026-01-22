@@ -166,7 +166,7 @@ export const FormularioCristal: React.FC = () => {
         }
     };
 
-    const inputClass = "w-full bg-white/10 border border-white/30 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all";
+    const inputClass = "w-full border border-white/30 bg-crema rounded-lg px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all";
     return (
         <div className="w-full max-w-5xl mx-auto p-4 sm:p-6 fade-in text-white">
             <div className="flex items-center justify-between gap-3 mb-6">
@@ -191,9 +191,9 @@ export const FormularioCristal: React.FC = () => {
                                 onChange={handleChange}
                                 className={inputClass}
                             >
-                                <option value="" className="bg-azul">Seleccionar...</option>
+                                <option value="" className="bg-crema text-gray-600">Seleccionar...</option>
                                 {materials.map(m => (
-                                    <option key={m.material_id} value={m.nombre} className="bg-azul">
+                                    <option key={m.material_id} value={m.nombre} className="bg-crema text-gray-600">
                                         {m.nombre}
                                     </option>
                                 ))}
@@ -209,9 +209,9 @@ export const FormularioCristal: React.FC = () => {
                                 onChange={handleChange}
                                 className={inputClass}
                             >
-                                <option value="" className="bg-azul">Seleccionar...</option>
+                                <option value="" className="bg-crema text-gray-600">Seleccionar...</option>
                                 {treatments.map(t => (
-                                    <option key={t.tratamiento_id} value={t.nombre} className="bg-azul">
+                                    <option key={t.tratamiento_id} value={t.nombre} className="bg-crema text-gray-600">
                                         {t.nombre}
                                     </option>
                                 ))}
@@ -231,7 +231,7 @@ export const FormularioCristal: React.FC = () => {
                         </div>
 
                         <div>
-                            <label className="block text-sm text-gray-400 mb-2 font-bold text-blue-400">Margen (%)</label>
+                            <label className="block text-sm text-gray-200 mb-2 font-bold text-blue-400">Margen de ganancia (%)</label>
                             <input
                                 type="number" step="0.01"
                                 required

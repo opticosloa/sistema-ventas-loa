@@ -1,8 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Swal from 'sweetalert2';
+import { useState, useEffect } from 'react';
 import { useUiStore, useAppSelector } from '../../hooks';
 import LOAApi from '../../api/LOAApi';
 import type { TicketDetail } from '../../types/Ticket';
+import { SupervisorAuthModal } from '../../components/modals/SupervisorAuthModal';
+import type { MetodoPago } from '../../types/Pago';
+import { QRCodeSVG } from 'qrcode.react';
+import { usePaymentLogic } from '../../forms/hooks/usePaymentLogic';
 
 // Definir estructura de respuesta de la API
 interface TicketDetailResponse {
@@ -15,9 +20,24 @@ export const TicketModal = () => {
   const { uid } = useAppSelector(state => state.auth);
   const queryClient = useQueryClient();
 
-  // ID del ticket seleccionado (viene en selectedProduct desde el store ui slice)
-  // Nota: selectedProduct aquí es el objeto Ticket de la lista, usamos su id para el fetch completo
+  // ID del ticket seleccionado
   const ticketId = selectedProduct?.ticket_id;
+  const ventaId = selectedProduct?.venta_id || ticketId;
+
+  // Integrate Payment Logic
+  // Pass ventaId to hook to enable polling and context
+  const {
+    asyncPaymentStatus,
+    setAsyncPaymentStatus,
+    qrData,
+    pointStatus,
+    pointDevices,
+    selectedDeviceId,
+    setSelectedDeviceId,
+    startMpPointFlow,
+    startMpQrFlow,
+    pagos: hookPayments // To watch for changes
+  } = usePaymentLogic(ventaId);
 
   const { data: ticket, isLoading, isError } = useQuery({
     queryKey: ['ticket', ticketId],
@@ -26,23 +46,19 @@ export const TicketModal = () => {
       const { data } = await LOAApi.get<TicketDetailResponse>(`/api/tickets/${ticketId}`);
       return data.result;
     },
-    enabled: !!ticketId && isItemModalOpen, // Solo fetch si está abierto y hay ID
+    enabled: !!ticketId && isItemModalOpen,
   });
 
-  // Mutation para cambiar estado
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, estado }: { id: string, estado: string }) => {
       return await LOAApi.put(`/api/tickets/${id}/status`, { estado });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ticket', ticketId] });
-      // También invalidar lista de tickets si queremos que se actualice al cerrar
-      // queryClient.invalidateQueries({ queryKey: ['tickets'] });
       Swal.fire("Éxito", "Estado actualizado correctamente", "success");
     }
   });
 
-  // Mutation para entregar
   const deliverMutation = useMutation({
     mutationFn: async ({ id }: { id: string }) => {
       return await LOAApi.post(`/api/tickets/${id}/deliver`, { usuario_id: uid });
@@ -50,12 +66,118 @@ export const TicketModal = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ticket', ticketId] });
       Swal.fire("Éxito", "Ticket marcado como ENTREGADO", "success");
-      handlerTicketDetail(null); // Cerrar modal al entregar
+      handlerTicketDetail(null);
     }
   });
 
+  const [clientDebt, setClientDebt] = useState<number>(0);
+  const [supervisorModalOpen, setSupervisorModalOpen] = useState(false);
 
-  if (!isItemModalOpen || !selectedProduct) return null;
+  // Payment Form States within Modal
+  const [selectedMethod, setSelectedMethod] = useState<MetodoPago | 'MP_POINT' | 'MP_QR' | ''>('');
+  const [amountInput, setAmountInput] = useState<string>('');
+  const [loadingPayment, setLoadingPayment] = useState(false);
+
+  // Sync Debt when Payments Change (Hook polling success)
+  useEffect(() => {
+    if (ticket?.cliente_id) {
+      // Re-fetch debt if payments change (implying a successful payment)
+      fetchDebt();
+    }
+  }, [hookPayments, ticket?.cliente_id]);
+
+  const fetchDebt = async () => {
+    if (ticket?.cliente_id) {
+      try {
+        const { data } = await LOAApi.get(`/api/clients/${ticket.cliente_id}/account-status`);
+        if (data.success && data.result) {
+          setClientDebt(data.result.cuenta_corriente || 0);
+        }
+      } catch (error) {
+        console.error("Error fetching client debt", error);
+      }
+    }
+  };
+
+  // Initial fetch
+  useEffect(() => {
+    if (ticket) {
+      fetchDebt();
+      // If ticket opens, we might want to ensure amountInput is empty or set to debt
+      // setAmountInput(clientDebt.toString()); // Optional
+    }
+  }, [ticket]);
+
+
+  const handlePaymentSubmit = async () => {
+    if (!ticket) return;
+    if (!selectedMethod) {
+      Swal.fire("Info", "Seleccione un método de pago", "info");
+      return;
+    }
+    const amount = parseFloat(amountInput);
+    if (isNaN(amount) || amount <= 0) {
+      Swal.fire("Error", "Monto inválido", "error");
+      return;
+    }
+    if (amount > clientDebt + 100) {
+      Swal.fire("Error", "El pago excede la deuda actual", "error");
+      return;
+    }
+
+    // AUTOMATED FLOWS
+    if (selectedMethod === 'MP_POINT') {
+      if (!selectedDeviceId) {
+        Swal.fire("Info", "Seleccione una terminal Point", "info");
+        return;
+      }
+      startMpPointFlow(amount, selectedDeviceId);
+      return;
+    }
+
+    if (selectedMethod === 'MP_QR') {
+      startMpQrFlow(amount);
+      return;
+    }
+
+    // MANUAL FLOWS (Legacy)
+    setLoadingPayment(true);
+    try {
+      await LOAApi.post('/api/payments/manual', {
+        venta_id: ticket.venta_id || ticket.ticket_id,
+        pagos: [{
+          metodo: selectedMethod,
+          monto: amount,
+          referencia: 'Pago de Deuda al Entregar'
+        }]
+      });
+
+      Swal.fire("Éxito", "Pago registrado. Deuda actualizada.", "success");
+      setAmountInput('');
+      setSelectedMethod('');
+      fetchDebt(); // Update debt immediately
+
+    } catch (error) {
+      console.error(error);
+      Swal.fire("Error", "Error al registrar pago", "error");
+    } finally {
+      setLoadingPayment(false);
+    }
+  };
+
+  const handleSupervisorSuccess = async (supervisorName: string) => {
+    if (!ticket) return;
+    try {
+      setSupervisorModalOpen(false);
+      await LOAApi.put(`/api/sales/${ticket.venta_id || ticket.ticket_id}/observation`, {
+        observation: `ENTREGA AUTORIZADA CON DEUDA ($${clientDebt}) POR: ${supervisorName}`
+      });
+      await deliverMutation.mutateAsync({ id: ticket.ticket_id });
+    } catch (error) {
+      console.error(error);
+      Swal.fire("Error", "Error al autorizar entrega", "error");
+    }
+  };
 
   const handleComparirEstado = (nuevoEstado: string) => {
     if (!ticket) return;
@@ -64,6 +186,10 @@ export const TicketModal = () => {
 
   const handleEntregar = async () => {
     if (!ticket) return;
+    if (clientDebt > 50) {
+      Swal.fire("Atención", `El cliente posee una deuda de $${clientDebt}. Debe saldarla o solicitar autorización.`, "warning");
+      return;
+    }
     const result = await Swal.fire({
       title: '¿Confirmar entrega al cliente?',
       icon: 'question',
@@ -75,6 +201,8 @@ export const TicketModal = () => {
       deliverMutation.mutate({ id: ticket.ticket_id });
     }
   }
+
+  if (!isItemModalOpen || !selectedProduct) return null;
 
 
   return (
@@ -152,49 +280,166 @@ export const TicketModal = () => {
 
 
                   {/* Action Buttons */}
-                  <div className="mt-4 flex gap-2">
-                    <button
-                      onClick={() => window.open(`${LOAApi.defaults.baseURL}/api/sales/${ticket.venta_id || ticket.ticket_id}/laboratory-order`, '_blank')}
-                      className="flex-none bg-indigo-600 text-white rounded-lg px-3 py-2 text-sm font-medium hover:bg-indigo-700 transition flex items-center gap-2"
-                      title="Imprimir Orden de Taller (PDF)"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 001.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5Zm-3 0h.008v.008H15V10.5Z" />
-                      </svg>
-                      Orden Taller
-                    </button>
+                  <div className="mt-4 flex flex-col gap-2">
+                    {/* Debt Warning & Payment */}
+                    {ticket.estado === 'LISTO' && clientDebt > 50 && (
+                      <div className="mb-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="text-red-700 font-bold text-sm">⚠️ Deuda Pendiente: ${clientDebt.toLocaleString()}</span>
+                          <button
+                            onClick={() => setSupervisorModalOpen(true)}
+                            className="text-xs bg-red-100 text-red-700 hover:bg-red-200 px-2 py-1 rounded"
+                          >
+                            Autorizar Entrega Forzosa
+                          </button>
+                        </div>
 
-                    {ticket.estado !== 'ENTREGADO' && ticket.estado !== 'CANCELADO' && (
-                      <>
-                        {ticket.estado === 'PENDIENTE' && (
-                          <button
-                            onClick={() => handleComparirEstado('EN_TALLER')}
-                            disabled={updateStatusMutation.isPending}
-                            className="flex-1 bg-blue-600 text-white rounded-lg px-3 py-2 text-sm font-medium hover:bg-blue-700 transition"
-                          >
-                            Pasar a Taller
-                          </button>
+                        <hr className="border-red-200 my-2" />
+
+                        {/* Payment UI */}
+
+                        {/* ASYNC STATE: Waiting Point */}
+                        {asyncPaymentStatus === 'WAITING_POINT' && (
+                          <div className="flex flex-col items-center justify-center p-4 bg-yellow-50 rounded border border-yellow-200">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-600 mb-2"></div>
+                            <span className="text-yellow-700 font-bold text-center text-xs">{pointStatus || "Esperando terminal..."}</span>
+                            <button
+                              onClick={() => setAsyncPaymentStatus('IDLE')}
+                              className="mt-2 text-xs text-red-500 underline"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
                         )}
-                        {ticket.estado === 'EN_TALLER' && (
-                          <button
-                            onClick={() => handleComparirEstado('LISTO')}
-                            disabled={updateStatusMutation.isPending}
-                            className="flex-1 bg-green-600 text-white rounded-lg px-3 py-2 text-sm font-medium hover:bg-green-700 transition"
-                          >
-                            Marcar Listo
-                          </button>
+
+                        {/* ASYNC STATE: Showing QR */}
+                        {asyncPaymentStatus === 'SHOWING_QR' && qrData && (
+                          <div className="flex flex-col items-center justify-center p-4 bg-white rounded border border-gray-200">
+                            <QRCodeSVG value={qrData} size={150} />
+                            <span className="text-gray-600 font-medium mt-2 text-xs">Escanee para pagar</span>
+                            <button
+                              onClick={() => setAsyncPaymentStatus('IDLE')}
+                              className="mt-2 text-xs text-red-500 underline"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
                         )}
-                        {ticket.estado === 'LISTO' && (
-                          <button
-                            onClick={handleEntregar}
-                            disabled={deliverMutation.isPending}
-                            className="flex-1 bg-cyan-600 text-white rounded-lg px-3 py-2 text-sm font-medium hover:bg-cyan-700 transition shadow-lg shadow-cyan-200"
-                          >
-                            ENTREGAR CLIENTE
-                          </button>
+
+                        {/* IDLE STATE: Form */}
+                        {asyncPaymentStatus === 'IDLE' && (
+                          <div className="flex flex-col gap-2">
+                            <span className="text-xs text-gray-600 font-medium">Saldar Deuda:</span>
+                            <div className="flex flex-wrap gap-2 mb-1">
+                              {/* Method Selection */}
+                              {['EFECTIVO', 'TRANSFERENCIA', 'MP_POINT', 'MP_QR'].map(m => (
+                                <button
+                                  key={m}
+                                  onClick={() => setSelectedMethod(m as any)}
+                                  className={`px-2 py-1 text-[10px] rounded border uppercase font-bold transition ${selectedMethod === m
+                                    ? 'bg-blue-600 text-white border-blue-600 shadow-md'
+                                    : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'
+                                    }`}
+                                >
+                                  {m.replace('MP_', 'MP ')}
+                                </button>
+                              ))}
+                            </div>
+
+                            {/* Point Device Selector */}
+                            {selectedMethod === 'MP_POINT' && (
+                              <select
+                                className="input text-xs w-full py-1 mb-1"
+                                value={selectedDeviceId}
+                                onChange={(e) => setSelectedDeviceId(e.target.value)}
+                              >
+                                <option value="">Seleccione Terminal...</option>
+                                {pointDevices.map((d: any) => (
+                                  <option key={d.id} value={d.id}>{d.name || d.id}</option>
+                                ))}
+                              </select>
+                            )}
+
+                            <div className="flex gap-2">
+                              <input
+                                type="number"
+                                className="input text-xs w-24 py-1"
+                                placeholder="Monto"
+                                value={amountInput}
+                                onChange={e => setAmountInput(e.target.value)}
+                              />
+                              <button
+                                onClick={handlePaymentSubmit}
+                                disabled={loadingPayment || !selectedMethod}
+                                className="btn-primary text-xs py-1 px-3 flex-1"
+                              >
+                                {loadingPayment
+                                  ? '...'
+                                  : selectedMethod === 'MP_POINT' ? 'Enviar a Terminal'
+                                    : selectedMethod === 'MP_QR' ? 'Generar QR'
+                                      : 'Registrar Pago'
+                                }
+                              </button>
+                            </div>
+                          </div>
                         )}
-                      </>
+                      </div>
                     )}
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => window.open(`${LOAApi.defaults.baseURL}/api/sales/${ticket.venta_id || ticket.ticket_id}/laboratory-order`, '_blank')}
+                        className="flex-none bg-indigo-600 text-white rounded-lg px-3 py-2 text-sm font-medium hover:bg-indigo-700 transition flex items-center gap-2"
+                        title="Imprimir Orden de Taller (PDF)"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 001.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5Zm-3 0h.008v.008H15V10.5Z" />
+                        </svg>
+                        Orden Taller
+                      </button>
+
+                      {ticket.estado !== 'ENTREGADO' && ticket.estado !== 'CANCELADO' && (
+                        <>
+                          {ticket.estado === 'PENDIENTE' && (
+                            <button
+                              onClick={() => handleComparirEstado('EN_TALLER')}
+                              disabled={updateStatusMutation.isPending}
+                              className="flex-1 bg-blue-600 text-white rounded-lg px-3 py-2 text-sm font-medium hover:bg-blue-700 transition"
+                            >
+                              Pasar a Taller
+                            </button>
+                          )}
+                          {ticket.estado === 'EN_TALLER' && (
+                            <button
+                              onClick={() => handleComparirEstado('LISTO')}
+                              disabled={updateStatusMutation.isPending}
+                              className="flex-1 bg-green-600 text-white rounded-lg px-3 py-2 text-sm font-medium hover:bg-green-700 transition"
+                            >
+                              Marcar Listo
+                            </button>
+                          )}
+                          {ticket.estado === 'LISTO' && (
+                            <div className="flex-1 flex gap-1">
+                              <button
+                                onClick={handleEntregar}
+                                disabled={deliverMutation.isPending || clientDebt > 50}
+                                className={`flex-1 text-white rounded-lg px-3 py-2 text-sm font-medium transition shadow-lg ${clientDebt > 50 ? 'bg-gray-400 cursor-not-allowed' : 'bg-cyan-600 hover:bg-cyan-700 shadow-cyan-200'}`}
+                                title={clientDebt > 50 ? `Bloqueado por deuda: $${clientDebt}` : "Entregar"}
+                              >
+                                {clientDebt > 50 ? "BLOQUEADO (DEUDA)" : "ENTREGAR CLIENTE"}
+                              </button>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+
+                    <SupervisorAuthModal
+                      actionName="Autorizar Entrega Forzosa"
+                      isOpen={supervisorModalOpen}
+                      onClose={() => setSupervisorModalOpen(false)}
+                      onSuccess={handleSupervisorSuccess}
+                    />
                   </div>
                 </section>
               </div>

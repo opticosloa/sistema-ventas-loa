@@ -38,6 +38,7 @@ export interface TicketDetail {
   notas: string;
 
   // Datos del Cliente (vienen del JOIN en el SP)
+  cliente_id: string; // Add this
   cliente_nombre: string;
   cliente_apellido: string;
   cliente_telefono: string;

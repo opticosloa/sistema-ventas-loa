@@ -36,6 +36,7 @@ export const TicketList: React.FC = () => {
     const fetchTickets = async () => {
       try {
         const { data } = await LOAApi.get<{ success: boolean; result: Ticket[] }>('/api/tickets');
+        console.log(data);
         if (data.success && Array.isArray(data.result)) {
           setTickets(data.result);
           if (data.result.length === 0) {
@@ -102,12 +103,12 @@ export const TicketList: React.FC = () => {
       <div className="hidden md:block overflow-x-auto mt-4">
         <table className="min-w-full bg-white border border-gray-300 table-fixed">
           <colgroup>
-            <col className="w-1/4" />  {/* cliente */}
-            <col className="w-40" />   {/* fecha - fijo, evita overflow */}
-            <col className="w-1/6" />  {/* empleado */}
-            <col className="w-1/3" />  {/* producto - truncar */}
-            <col className="w-28" />   {/* estado */}
-            <col className="w-28" />   {/* total - fijo */}
+            <col className="w-1/4" />
+            <col className="w-40" />
+            <col className="w-1/6" />
+            <col className="w-1/3" />
+            <col className="w-28" />
+            <col className="w-28" />
           </colgroup>
 
           <thead>

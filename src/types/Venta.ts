@@ -11,6 +11,7 @@ export interface Venta {
     medio_pago?: string;
     pagado: boolean;
     total: number;
+    saldo_pendiente?: number;
     created_at: string;
     updated_at: string;
 }

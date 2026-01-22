@@ -179,48 +179,45 @@ export const FormularioVenta: React.FC = () => {
 
   // LOGIC: Calculate Near Sphere from Far Sphere + Add
   useEffect(() => {
-    const calculateNear = (esf: string, add: string) => {
-      const esfVal = parseFloat(esf) || 0;
-      const addVal = parseFloat(add) || 0;
-      // If no valid Add, we do nothing? Or we assume Add=0 implies Near=Far?
-      // Usually Near Sphere = Far Sphere + Add.
-      // If Add is 0, Near = Far.
-      const nearVal = esfVal + addVal;
-      // Format to 2 decimals
-      return nearVal.toFixed(2);
-    };
-
-    // Calculate OD
-    const newCercaOD = calculateNear(lejos_OD_Esf, lejos_OD_Add);
-    // Only update if different to avoid loops/unnecessary renders.
-    if (newCercaOD !== cerca_OD_Esf) {
-      setFieldValue('cerca_OD_Esf', newCercaOD);
-    }
-
-    // SYNC CIL/EJE if Add is present (or generally if we want to default to Lejos values)
-    // User: "al cargar un ... Add ... debe cargar el cilindro y eje"
+    // Only calculate/sync if Add is present
     if (lejos_OD_Add && lejos_OD_Add !== "0") {
+      const calculateNear = (esf: string, add: string) => {
+        const esfVal = parseFloat(esf) || 0;
+        const addVal = parseFloat(add) || 0;
+        const nearVal = esfVal + addVal;
+        return nearVal.toFixed(2);
+      };
+
+      // Calculate OD
+      const newCercaOD = calculateNear(lejos_OD_Esf, lejos_OD_Add);
+      // Only update if different
+      if (newCercaOD !== cerca_OD_Esf) {
+        setFieldValue('cerca_OD_Esf', newCercaOD);
+      }
+
+      // SYNC CIL/EJE
       if (lejos_OD_Cil !== cerca_OD_Cil) setFieldValue('cerca_OD_Cil', lejos_OD_Cil);
       if (lejos_OD_Eje !== cerca_OD_Eje) setFieldValue('cerca_OD_Eje', lejos_OD_Eje);
     }
   }, [lejos_OD_Esf, lejos_OD_Add, cerca_OD_Esf, lejos_OD_Cil, lejos_OD_Eje, setFieldValue]);
 
   useEffect(() => {
-    const calculateNear = (esf: string, add: string) => {
-      const esfVal = parseFloat(esf) || 0;
-      const addVal = parseFloat(add) || 0;
-      const nearVal = esfVal + addVal;
-      return nearVal.toFixed(2);
-    };
-
-    // Calculate OI
-    const newCercaOI = calculateNear(lejos_OI_Esf, lejos_OI_Add);
-    if (newCercaOI !== cerca_OI_Esf) {
-      setFieldValue('cerca_OI_Esf', newCercaOI);
-    }
-
-    // SYNC CIL/EJE OI
+    // Only calculate/sync if Add is present
     if (lejos_OI_Add && lejos_OI_Add !== "0") {
+      const calculateNear = (esf: string, add: string) => {
+        const esfVal = parseFloat(esf) || 0;
+        const addVal = parseFloat(add) || 0;
+        const nearVal = esfVal + addVal;
+        return nearVal.toFixed(2);
+      };
+
+      // Calculate OI
+      const newCercaOI = calculateNear(lejos_OI_Esf, lejos_OI_Add);
+      if (newCercaOI !== cerca_OI_Esf) {
+        setFieldValue('cerca_OI_Esf', newCercaOI);
+      }
+
+      // SYNC CIL/EJE OI
       if (lejos_OI_Cil !== cerca_OI_Cil) setFieldValue('cerca_OI_Cil', lejos_OI_Cil);
       if (lejos_OI_Eje !== cerca_OI_Eje) setFieldValue('cerca_OI_Eje', lejos_OI_Eje);
     }
