@@ -111,6 +111,7 @@ export const FormularioDePago: React.FC = () => {
               nroOrden={nroOrden}
               setNroOrden={setNroOrden}
               onCoverInsurance={handleCoverInsurance}
+              hasSocialWorkPayment={pagos.some(p => p.metodo === 'OBRA_SOCIAL')}
             />
 
             <PaymentActionButtons

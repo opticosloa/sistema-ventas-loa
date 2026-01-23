@@ -39,14 +39,15 @@ export const BotonEscanearDNI: React.FC<BotonEscanearDNIProps> = ({ onScanComple
                 const formatsToSupport = [Html5QrcodeSupportedFormats.PDF_417];
                 const config = {
                     fps: 30, // Más fluido
-                    qrbox: { width: 300, height: 150 }, // Caja rectangular para DNI
+                    // qrbox: { width: 300, height: 150 }, // Caja rectangular para DNI
                     aspectRatio: 1.0,
                     formatsToSupport: formatsToSupport,
                     videoConstraints: {
                         facingMode: "environment",
                         width: { min: 1280, ideal: 1920 },
                         height: { min: 720, ideal: 1080 }
-                    }
+                    },
+                    disableFlip: true
                 };
 
                 scannerRef.current = new Html5Qrcode(regionId);

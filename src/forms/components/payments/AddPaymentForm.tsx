@@ -1,6 +1,6 @@
 import React from 'react';
 import type { MetodoPago } from '../../../types/Pago';
-import type { ObraSocial } from '../../../types/ObrasSociales';
+import type { ObraSocial } from '../../../types/ObraSocial';
 
 interface AddPaymentFormProps {
     selectedMethod: MetodoPago | '';
@@ -16,6 +16,7 @@ interface AddPaymentFormProps {
     nroOrden?: string;
     setNroOrden?: (val: string) => void;
     onCoverInsurance?: () => void;
+    hasSocialWorkPayment?: boolean;
 }
 
 const metodos: { id: MetodoPago; label: string; icon: string }[] = [
@@ -38,6 +39,7 @@ export const AddPaymentForm: React.FC<AddPaymentFormProps> = ({
     nroOrden = '',
     setNroOrden,
     // onCoverInsurance
+    hasSocialWorkPayment = false
 }) => {
     const selectedOS = obrasSociales.find(os => os.obra_social_id === selectedObraSocialId);
     return (
@@ -56,7 +58,8 @@ export const AddPaymentForm: React.FC<AddPaymentFormProps> = ({
                         className={`p-3 rounded-lg border flex flex-col items-center justify-center gap-1 transition-all ${selectedMethod === m.id
                             ? 'bg-celeste text-negro border-celeste scale-105 shadow-md'
                             : 'bg-transparent border-gray-600 hover:border-celeste hover:text-celeste'
-                            }`}
+                            } ${m.id === 'OBRA_SOCIAL' && hasSocialWorkPayment ? 'opacity-50 cursor-not-allowed bg-gray-800' : ''}`}
+                        disabled={m.id === 'OBRA_SOCIAL' && hasSocialWorkPayment}
                     >
                         <span className="text-2xl">{m.icon}</span>
                         <span className="text-xs font-medium">{m.label}</span>
@@ -69,7 +72,7 @@ export const AddPaymentForm: React.FC<AddPaymentFormProps> = ({
                     <div className="mb-4">
                         <label className="block text-sm text-gray-300 mb-1">Seleccionar Obra Social</label>
                         <select
-                            value={selectedObraSocialId}
+                            value={selectedObraSocialId || ''}
                             onChange={(e) => setSelectedObraSocialId && setSelectedObraSocialId(e.target.value)}
                             className="input w-full"
                         >
@@ -106,7 +109,7 @@ export const AddPaymentForm: React.FC<AddPaymentFormProps> = ({
                         <label className="block text-sm text-gray-300 mb-1">Nro. de Orden / Autorización *</label>
                         <input
                             type="text"
-                            value={nroOrden}
+                            value={nroOrden || ''}
                             onChange={(e) => setNroOrden && setNroOrden(e.target.value)}
                             className="input w-full"
                             placeholder="Ingrese código..."
@@ -129,9 +132,6 @@ export const AddPaymentForm: React.FC<AddPaymentFormProps> = ({
                         Calcula automáticamente el total de items ópticos.
                     </p>
                     */}
-                    <div className="bg-yellow-900/30 p-2 rounded border border-yellow-700/50 text-yellow-200 text-xs text-center">
-                        Ingrese el monto cubierto manualmente abajo 👇
-                    </div>
                 </div>
             )}
 
@@ -141,10 +141,11 @@ export const AddPaymentForm: React.FC<AddPaymentFormProps> = ({
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">$</span>
                     <input
                         type="number"
-                        value={amountInput}
+                        value={amountInput || ''}
                         onChange={(e) => setAmountInput(e.target.value)}
-                        className="input pl-8 w-full text-lg font-bold"
+                        className={`input pl-8 w-full text-lg font-bold ${selectedMethod === 'OBRA_SOCIAL' ? 'bg-gray-700 cursor-not-allowed text-gray-400' : ''}`}
                         placeholder="0.00"
+                        readOnly={selectedMethod === 'OBRA_SOCIAL'}
                     />
                 </div>
             </div>

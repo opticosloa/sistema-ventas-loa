@@ -22,6 +22,9 @@ export const ListaObrasSociales: React.FC = () => {
         sitio_web: '',
         instrucciones: '',
         activo: true,
+        monto_cobertura_total: 0,
+        cobertura_armazon_max: 0,
+        cobertura_cristal_max: 0,
         cobertura: {
             porcentaje_cristales: 0,
             porcentaje_armazones: 0
@@ -31,6 +34,10 @@ export const ListaObrasSociales: React.FC = () => {
     // Local state for numeric inputs to handle "0" better or just bind directly.
     const [percCristales, setPercCristales] = useState<number>(0);
     const [percArmazones, setPercArmazones] = useState<number>(0);
+
+    const [maxCristales, setMaxCristales] = useState<number>(0);
+    const [maxArmazones, setMaxArmazones] = useState<number>(0);
+    const [montoCobertura, setMontoCobertura] = useState<number>(0);
 
     const loadObrasSociales = async () => {
         setLoading(true);
@@ -64,11 +71,17 @@ export const ListaObrasSociales: React.FC = () => {
             setFormData(obraSocial);
             setPercCristales(obraSocial.cobertura?.porcentaje_cristales || 0);
             setPercArmazones(obraSocial.cobertura?.porcentaje_armazones || 0);
+            setMaxCristales(obraSocial.cobertura_cristal_max || 0);
+            setMaxArmazones(obraSocial.cobertura_armazon_max || 0);
+            setMontoCobertura(obraSocial.monto_cobertura_total || 0);
         } else {
             setEditingObraSocial(null);
-            setFormData({ nombre: '', plan: '', sitio_web: '', instrucciones: '', activo: true, cobertura: { porcentaje_cristales: 0, porcentaje_armazones: 0 } });
+            setFormData({ nombre: '', plan: '', sitio_web: '', instrucciones: '', activo: true, cobertura: { porcentaje_cristales: 0, porcentaje_armazones: 0 }, monto_cobertura_total: 0, cobertura_cristal_max: 0, cobertura_armazon_max: 0 });
             setPercCristales(0);
             setPercArmazones(0);
+            setMaxCristales(0);
+            setMaxArmazones(0);
+            setMontoCobertura(0);
         }
         setIsModalOpen(true);
     };
@@ -86,6 +99,9 @@ export const ListaObrasSociales: React.FC = () => {
             // Package coverage
             const finalFormData = {
                 ...formData,
+                monto_cobertura_total: montoCobertura,
+                cobertura_armazon_max: maxArmazones,
+                cobertura_cristal_max: maxCristales,
                 cobertura: {
                     porcentaje_cristales: percCristales,
                     porcentaje_armazones: percArmazones
@@ -138,7 +154,7 @@ export const ListaObrasSociales: React.FC = () => {
     const inputClass = "w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white focus:ring-2 focus:ring-cyan-500 outline-none";
 
     return (
-        <div className="min-h-screen bg-slate-900 p-6 fade-in">
+        <div className="min-h-screen bg-slate-900 p-6 fade-in rounded-lg">
             <div className="max-w-6xl mx-auto">
                 <header className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
                     <div>
@@ -179,7 +195,8 @@ export const ListaObrasSociales: React.FC = () => {
                                 <tr>
                                     <th className="px-6 py-4">Nombre</th>
                                     <th className="px-6 py-4">Plan</th>
-                                    <th className="px-6 py-4">Cobertura</th>
+                                    <th className="px-6 py-4">Cobertura Fija</th>
+                                    <th className="px-6 py-4">Cobertura %</th>
                                     <th className="px-6 py-4">Instrucciones</th>
                                     <th className="px-6 py-4 text-center">Estado</th>
                                     <th className="px-6 py-4 text-right">Acciones</th>
@@ -203,6 +220,11 @@ export const ListaObrasSociales: React.FC = () => {
                                         <tr key={os.obra_social_id} className="hover:bg-slate-700/30 transition-colors">
                                             <td className="px-6 py-4 font-medium text-white">{os.nombre}</td>
                                             <td className="px-6 py-4 text-sm text-cyan-300">{os.plan || '-'}</td>
+                                            <td className="px-6 py-4 text-sm text-green-400 font-bold">
+                                                {os.monto_cobertura_total && Number(os.monto_cobertura_total) > 0
+                                                    ? `$${Number(os.monto_cobertura_total).toLocaleString()}`
+                                                    : '-'}
+                                            </td>
                                             <td className="px-6 py-4 text-xs">
                                                 <div className="flex flex-col gap-1">
                                                     <span className="text-slate-300">Cristales: <span className="text-green-400 font-bold">{os.cobertura?.porcentaje_cristales || 0}%</span></span>
@@ -262,7 +284,7 @@ export const ListaObrasSociales: React.FC = () => {
                                     <label className="block text-sm text-slate-400 mb-1">Nombre *</label>
                                     <input
                                         required
-                                        value={formData.nombre}
+                                        value={formData.nombre || ''}
                                         onChange={e => setFormData({ ...formData, nombre: e.target.value })}
                                         className={inputClass}
                                         placeholder="Ej. OSDE"
@@ -271,7 +293,7 @@ export const ListaObrasSociales: React.FC = () => {
                                 <div>
                                     <label className="block text-sm text-slate-400 mb-1">Plan</label>
                                     <input
-                                        value={formData.plan}
+                                        value={formData.plan || ''}
                                         onChange={e => setFormData({ ...formData, plan: e.target.value })}
                                         className={inputClass}
                                         placeholder="Ej. 210"
@@ -284,7 +306,7 @@ export const ListaObrasSociales: React.FC = () => {
                                 <div className="relative">
                                     <Globe className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
                                     <input
-                                        value={formData.sitio_web}
+                                        value={formData.sitio_web || ''}
                                         onChange={e => setFormData({ ...formData, sitio_web: e.target.value })}
                                         className={`${inputClass} pl-10`}
                                         placeholder="www.ejemplo.com"
@@ -294,28 +316,78 @@ export const ListaObrasSociales: React.FC = () => {
 
                             <div className="p-4 bg-slate-700/30 rounded-lg border border-slate-700">
                                 <h3 className="text-sm font-semibold text-cyan-400 mb-3 uppercase tracking-wider">Cobertura Automática</h3>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-xs text-slate-400 mb-1">% Cristales</label>
+                                <div className="grid grid-cols-2 gap-4 mb-4">
+                                    <div className="col-span-2">
+                                        <label className="block text-xs text-slate-400 mb-1">Monto Cobertura Fija ($)</label>
                                         <input
                                             type="number"
                                             min="0"
-                                            max="100"
-                                            value={percCristales}
-                                            onChange={e => setPercCristales(Number(e.target.value))}
+                                            step="0.01"
+                                            value={montoCobertura || 0}
+                                            onChange={e => setMontoCobertura(e.target.value === '' ? 0 : parseFloat(e.target.value))}
+                                            onFocus={e => e.target.select()}
                                             className={inputClass}
+                                            placeholder="Ej: 35000"
                                         />
+                                        <p className="text-slate-500 text-[10px] mt-1">Si es mayor a 0, se aplica como pago fijo automáticamente.</p>
                                     </div>
-                                    <div>
-                                        <label className="block text-xs text-slate-400 mb-1">% Armazones</label>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            max="100"
-                                            value={percArmazones}
-                                            onChange={e => setPercArmazones(Number(e.target.value))}
-                                            className={inputClass}
-                                        />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
+                                        <label className="block text-xs font-bold text-cyan-300 mb-2 uppercase">Cristales</label>
+                                        <div className="space-y-3">
+                                            <div>
+                                                <label className="block text-xs text-slate-400 mb-1">Porcentaje (%)</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    max="100"
+                                                    value={percCristales}
+                                                    onChange={e => setPercCristales(Number(e.target.value))}
+                                                    className={inputClass}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-slate-400 mb-1">Tope Máximo ($)</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    value={maxCristales || 0}
+                                                    onChange={e => setMaxCristales(e.target.value === '' ? 0 : parseFloat(e.target.value))}
+                                                    onFocus={e => e.target.select()}
+                                                    className={inputClass}
+                                                    placeholder="Sin Límite"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="bg-slate-900/50 p-3 rounded-lg border border-slate-700/50">
+                                        <label className="block text-xs font-bold text-cyan-300 mb-2 uppercase">Armazones</label>
+                                        <div className="space-y-3">
+                                            <div>
+                                                <label className="block text-xs text-slate-400 mb-1">Porcentaje (%)</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    max="100"
+                                                    value={percArmazones}
+                                                    onChange={e => setPercArmazones(Number(e.target.value))}
+                                                    className={inputClass}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-slate-400 mb-1">Tope Máximo ($)</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    value={maxArmazones || 0}
+                                                    onChange={e => setMaxArmazones(e.target.value === '' ? 0 : parseFloat(e.target.value))}
+                                                    onFocus={e => e.target.select()}
+                                                    className={inputClass}
+                                                    placeholder="Sin Límite"
+                                                />
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -325,7 +397,7 @@ export const ListaObrasSociales: React.FC = () => {
                                 <label className="block text-sm text-slate-400 mb-1">Instrucciones</label>
                                 <textarea
                                     rows={3}
-                                    value={formData.instrucciones}
+                                    value={formData.instrucciones || ''}
                                     onChange={e => setFormData({ ...formData, instrucciones: e.target.value })}
                                     className={inputClass}
                                     placeholder="Detalles sobre facturación..."

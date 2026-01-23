@@ -1,7 +1,7 @@
 import { Routes, Route } from 'react-router-dom';
 import { Navbar, ConsultaStock, ConsultaCliente, TicketList, TicketsHistorial, Estadisticas, ListaEmpleados, Home, ListaTicketsTaller, ConfiguracionPage, CierreCajaPage, ListaMarcas, ListaProveedores, ListaObrasSociales, DoctorManagementPage } from '../ventas/components';
 import { LoginPage, NotFoundPage, PagoResultadoPage, UnAuthorized, DevolucionesPage } from '../ventas/page';
-import { HomePage, EmpleadoHomePage, TallerHomePage, AdminObrasSociales } from '../page';
+import { HomePage, EmpleadoHomePage, TallerHomePage } from '../page';
 import { AuthGuard, RoleGuard, TenantGuard } from '../auth/guards';
 import { useAuthStore } from '../hooks';
 import { FormularioDePago, FormularioVenta, FormularioProducto, FormularioCristal, FormularioDeEntregaTicket } from '../forms';
@@ -42,7 +42,7 @@ export const AppRouter = () => {
                 <Route path="configuracion/obras-sociales" element={<ListaObrasSociales />} />
                 <Route path="configuracion/doctores" element={<DoctorManagementPage />} />
                 <Route path="cierre-caja" element={<CierreCajaPage />} />
-                <Route path="obras-sociales" element={<AdminObrasSociales />} />
+                {/* <Route path="obras-sociales" element={<AdminObrasSociales />} /> REMOVED */}
                 <Route path="liquidaciones" element={<AdminLiquidaciones />} />
                 <Route path="liquidaciones/nueva" element={<NuevaLiquidacion />} />
                 <Route path="liquidaciones/:id" element={<DetalleLiquidacion />} />

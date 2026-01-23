@@ -3,9 +3,9 @@ import Swal from 'sweetalert2';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import LOAApi from '../../api/LOAApi';
 import type { MetodoPago, PagoParcial } from '../../types/Pago';
-import type { ObraSocial } from '../../types/ObrasSociales';
 import type { CartItem } from '../components/SalesItemsList';
 import { useAppSelector } from '../../hooks';
+import type { ObraSocial } from '../../types/ObraSocial';
 
 export interface UsePaymentLogicReturn {
     ventaId: string | number | null;
@@ -81,6 +81,23 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
     const [ventaId, setVentaId] = useState<string | number | null>(overrideVentaId || paramVentaId || stateVentaId || null);
     const [clientId, setClientId] = useState<string | null>(null);
 
+    // State
+    const [pagos, setPagos] = useState<(PagoParcial & { estado?: string, referencia?: string })[]>([]);
+    const [loading, setLoading] = useState(false);
+
+    // Form State for new payment
+    const [selectedMethod, setSelectedMethod] = useState<MetodoPago | ''>('');
+    const [amountInput, setAmountInput] = useState<string>('');
+
+    // Form State for Obras Sociales
+    const [selectedObraSocialId, setSelectedObraSocialId] = useState<string | ''>('');
+    const [nroOrden, setNroOrden] = useState<string>('');
+
+
+    // Handlers
+    const [mpModalOpen, setMpModalOpen] = useState(false);
+    const [mpAmount, setMpAmount] = useState(0);
+
     // Update ventaId if override changes
     useEffect(() => {
         if (overrideVentaId) setVentaId(overrideVentaId);
@@ -130,6 +147,37 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
         };
         fetchOS();
     }, []);
+
+    // Calculations
+    // Solo sumamos los confirmados para el "Pagado" real
+    const totalPagado = pagos.reduce((acc, p) => acc + (p.confirmed ? (Number(p.monto) || 0) : 0), 0);
+    const restante = Math.max(0, currentTotal - totalPagado);
+
+    // AUTO-CALCULO COBERTURA FIJA (Solo sugerir monto, NO agregar pago)
+    useEffect(() => {
+        if (selectedMethod === 'OBRA_SOCIAL' && selectedObraSocialId) {
+            const os = obrasSociales.find(o => String(o.obra_social_id) === String(selectedObraSocialId));
+
+            if (os && os.monto_cobertura_total && Number(os.monto_cobertura_total) > 0) {
+                const coberturaFija = Number(os.monto_cobertura_total);
+                const montoCubierto = Math.min(currentTotal, coberturaFija);
+
+                // Mostrar notificación informativa
+                Swal.fire({
+                    title: 'Cobertura Fija Detectada',
+                    text: `La obra social cubre hasta $${montoCubierto}. Complete el Nro. de Orden y agregue el pago.`,
+                    icon: 'info',
+                    timer: 2500,
+                    showConfirmButton: true
+                });
+
+                // Pre-llenar el input de monto con lo que cubre la OS
+                setAmountInput(montoCubierto.toFixed(2));
+            } else {
+                setAmountInput('');
+            }
+        }
+    }, [selectedObraSocialId, selectedMethod, obrasSociales, currentTotal]);
 
     // Sync with location state on mount
     useEffect(() => {
@@ -271,27 +319,6 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
             Swal.fire("Error", "Error cancelando venta", "error");
         }
     };
-
-    // State
-    const [pagos, setPagos] = useState<(PagoParcial & { estado?: string, referencia?: string })[]>([]);
-    const [loading, setLoading] = useState(false);
-
-    // Form State for new payment
-    const [selectedMethod, setSelectedMethod] = useState<MetodoPago | ''>('');
-    const [amountInput, setAmountInput] = useState<string>('');
-
-    // Form State for Obras Sociales
-    const [selectedObraSocialId, setSelectedObraSocialId] = useState<string | ''>('');
-    const [nroOrden, setNroOrden] = useState<string>('');
-
-    // Calculations
-    // Solo sumamos los confirmados para el "Pagado" real
-    const totalPagado = pagos.reduce((acc, p) => acc + (p.confirmed ? (Number(p.monto) || 0) : 0), 0);
-    const restante = Math.max(0, currentTotal - totalPagado);
-
-    // Handlers
-    const [mpModalOpen, setMpModalOpen] = useState(false);
-    const [mpAmount, setMpAmount] = useState(0);
 
     const handleAddPayment = () => {
         if (!selectedMethod) return Swal.fire("Info", "Seleccioná un método de pago", "info");
