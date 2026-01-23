@@ -4,7 +4,7 @@ interface PaymentActionButtonsProps {
     loading: boolean;
     currentTotal: number;
     onPay: () => void;
-    onAuthorize: () => void;
+    onAuthorize?: () => void;
 }
 
 export const PaymentActionButtons: React.FC<PaymentActionButtonsProps> = ({
@@ -15,16 +15,18 @@ export const PaymentActionButtons: React.FC<PaymentActionButtonsProps> = ({
 }) => {
     return (
         <div className="flex flex-col gap-3">
-            <button
-                onClick={onAuthorize}
-                disabled={loading || currentTotal <= 0}
-                className={`w-full py-3 rounded-lg font-bold text-lg transition-all ${!loading && currentTotal > 0
-                    ? 'bg-orange-600 hover:bg-orange-500 text-white shadow-lg'
-                    : 'bg-gray-700 text-gray-400 cursor-not-allowed'
-                    }`}
-            >
-                Pagar al Retirar
-            </button>
+            {onAuthorize && (
+                <button
+                    onClick={onAuthorize}
+                    disabled={loading || currentTotal <= 0}
+                    className={`w-full py-3 rounded-lg font-bold text-lg transition-all ${!loading && currentTotal > 0
+                        ? 'bg-orange-600 hover:bg-orange-500 text-white shadow-lg'
+                        : 'bg-gray-700 text-gray-400 cursor-not-allowed'
+                        }`}
+                >
+                    Pagar al Retirar
+                </button>
+            )}
 
             <button
                 onClick={onPay}

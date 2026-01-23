@@ -7,10 +7,10 @@ import { DesgloseCobrosOS } from './DesgloseCobrosOS';
 export const CierreCajaPanel = () => {
     const [summary, setSummary] = useState<CashSummary | null>(null);
     const [loading, setLoading] = useState(true);
-    const [efectivoReal, setEfectivoReal] = useState<string>(''); // String to handle empty input
+    const [efectivoFisico, setEfectivoFisico] = useState<string>('');
+    const [montoRemanente, setMontoRemanente] = useState<string>('');
     const [observaciones, setObservaciones] = useState('');
     const [calculating, setCalculating] = useState(false);
-    const [generarLiquidaciones, setGenerarLiquidaciones] = useState(true);
 
     useEffect(() => {
         fetchSummary();
@@ -32,28 +32,34 @@ export const CierreCajaPanel = () => {
     const handleClose = async () => {
         if (!summary) return;
 
-        const efectivoNum = parseFloat(efectivoReal) || 0;
-        // El total a enviar suele ser el arqueo real total, pero el backend pide "monto_real".
-        // Si el backend espera el monto total real (efectivo real + otros medios), deberiamos sumarlo.
-        // Usualmente "monto_real" en cierre se refiere a lo que hay en caja fisica (Efectivo).
-        // Sin embargo, si el SP calcula diferencia = monto_real - monto_sistema, y monto_sistema incluye todo...
-        // ENTONCES monto_real debe incluir todo.
-        // Ajuste: Monto Real = Efectivo Real + Electronico (Sistema) + OS (Sistema).
-        // Asumimos que lo electronico y OS siempre coincide porque no es tangible.
-        const totalToSend = efectivoNum + Number(summary.total_electronico) + Number(summary.total_obra_social);
-        const diferencia = efectivoNum - Number(summary.total_efectivo);
+        const efectivoFisicoNum = parseFloat(efectivoFisico) || 0;
+        const remanenteNum = parseFloat(montoRemanente) || 0;
+
+        // 1. Calculate Others (System)
+        const totalOtros = Number(summary.total_electronico) + Number(summary.total_obra_social);
+
+        // 2. Calculate Global Real (To be sent)
+        // monto_real = Efectivo Físico + Otros Medios
+        const montoRealGlobal = efectivoFisicoNum + totalOtros;
+
+        // 3. Calculate Diff (Just for Alert/Validation locally)
+        // Expected Cash = Cash Sales + (We don't know Initial Fund here easily unless we fetch it or user knows it)
+        // Actually summary.total_efectivo is SYSTEM CASH SALES.
+        // We probably shouldn't block, just warn.
+
+        // Extracción Estimada
+        const extraccion = efectivoFisicoNum - remanenteNum;
 
         const result = await Swal.fire({
             title: '¿Confirmar Cierre?',
             html: `
                 <div class="text-left space-y-2">
-                    <p><strong>Sistema Efectivo:</strong> ${formatCurrency(summary.total_efectivo)}</p>
-                    <p><strong>Real Efectivo:</strong> ${formatCurrency(efectivoNum)}</p>
-                    <p class="text-lg font-bold ${diferencia < 0 ? 'text-red-500' : 'text-green-500'}">
-                        Diferencia Efectivo: ${formatCurrency(diferencia)}
-                    </p>
-                    ${generarLiquidaciones && summary.total_obra_social > 0 ?
-                    '<p class="text-sm text-blue-600 font-semibold mt-2">✨ Se generarán borradores de liquidación automáticamente.</p>' : ''}
+                    <p><strong>Efectivo Físico:</strong> ${formatCurrency(efectivoFisicoNum)}</p>
+                    <p><strong>Otros Medios:</strong> ${formatCurrency(totalOtros)}</p>
+                    <hr/>
+                    <p><strong>Total Global (Declarado):</strong> ${formatCurrency(montoRealGlobal)}</p>
+                    <p class="text-blue-600 font-bold">Extracción Estimada: ${formatCurrency(extraccion)}</p> 
+                    <p class="text-sm text-gray-500">Monto Remanente: ${formatCurrency(remanenteNum)}</p>
                 </div>
             `,
             icon: 'warning',
@@ -65,23 +71,30 @@ export const CierreCajaPanel = () => {
         if (result.isConfirmed) {
             setCalculating(true);
             try {
-                // Se envia el total calculado. La generacion de liquidaciones es automatica en backend si hay OS.
-                const response = await CashService.performClosing(totalToSend, observaciones);
+                // Send: monto_real, observaciones, monto_remanente, efectivo_fisico
+                const response = await CashService.performClosing(
+                    montoRealGlobal,
+                    observaciones,
+                    remanenteNum,
+                    efectivoFisicoNum
+                );
 
-                let msgExito = `Diferencia total registrada: ${formatCurrency(response.diferencia)}`;
-                if (generarLiquidaciones && summary.total_obra_social > 0) {
-                    msgExito += `<br/><br/><b>✅ Liquidaciones generadas en borrador.</b>`;
-                }
+                // Create Blob URL for PDF
+                const file = new Blob([response], { type: 'application/pdf' });
+                const fileURL = URL.createObjectURL(file);
+                window.open(fileURL, '_blank');
 
                 await Swal.fire({
                     title: '¡Caja Cerrada!',
-                    html: msgExito,
+                    text: 'El reporte se ha generado correctamente.',
                     icon: 'success'
                 });
+
                 setSummary(null);
-                setEfectivoReal('');
+                setEfectivoFisico('');
+                setMontoRemanente('');
                 setObservaciones('');
-                fetchSummary(); // Refresh (should be empty now)
+                fetchSummary();
             } catch (error: any) {
                 console.error(error);
                 Swal.fire('Error', error?.response?.data?.error || 'No se pudo cerrar la caja', 'error');
@@ -94,8 +107,10 @@ export const CierreCajaPanel = () => {
     if (loading) return <div className="p-10 text-center">Cargando resumen...</div>;
     if (!summary) return <div className="p-10 text-center">No hay datos disponibles</div>;
 
-    const efectivoNum = parseFloat(efectivoReal) || 0;
-    const diffEfectivo = efectivoNum - Number(summary.total_efectivo);
+    const efectivoFisicoNum = parseFloat(efectivoFisico) || 0;
+    const remanenteNum = parseFloat(montoRemanente) || 0;
+    const extraccionEstimada = efectivoFisicoNum - remanenteNum;
+    const otrosMedios = Number(summary.total_electronico) + Number(summary.total_obra_social);
 
     return (
         <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-screen">
@@ -137,24 +152,51 @@ export const CierreCajaPanel = () => {
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg h-fit">
                     <h2 className="text-xl font-bold mb-4 text-gray-700 dark:text-gray-200">Arqueo de Caja</h2>
 
-                    <div className="mb-4">
-                        <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2">
-                            Efectivo Real en Caja
-                        </label>
-                        <input
-                            type="number"
-                            value={efectivoReal}
-                            onChange={(e) => setEfectivoReal(e.target.value)}
-                            className="w-full p-4 text-2xl border rounded-lg focus:ring-2 focus:ring-blue-500 bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
-                            placeholder="0.00"
-                        />
+                    {/* Inputs Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2">
+                                Efectivo Físico
+                            </label>
+                            <input
+                                type="number"
+                                value={efectivoFisico}
+                                onChange={(e) => setEfectivoFisico(e.target.value)}
+                                className="w-full p-3 text-xl border rounded-lg focus:ring-2 focus:ring-blue-500 bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                placeholder="0.00"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-gray-700 dark:text-gray-300 font-bold mb-2">
+                                Monto Remanente
+                            </label>
+                            <input
+                                type="number"
+                                value={montoRemanente}
+                                onChange={(e) => setMontoRemanente(e.target.value)}
+                                className="w-full p-3 text-xl border rounded-lg focus:ring-2 focus:ring-blue-500 bg-gray-50 dark:bg-gray-700 dark:border-gray-600 dark:text-white"
+                                placeholder="Fondo prox. turno"
+                            />
+                        </div>
                     </div>
 
-                    <div className={`p-4 rounded-lg mb-6 ${diffEfectivo < 0 ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300'}`}>
-                        <div className="flex justify-between items-center">
-                            <span className="font-semibold">Diferencia (Efectivo):</span>
-                            <span className="text-2xl font-bold">{diffEfectivo > 0 ? '+' : ''}{formatCurrency(diffEfectivo)}</span>
+
+                    {/* Read Only Calculation */}
+                    <div className="bg-gray-100 dark:bg-gray-700/50 p-4 rounded-lg mb-4 space-y-2">
+                        <div className="flex justify-between text-sm">
+                            <span className="text-gray-600 dark:text-gray-400">Otros Medios (Sistema):</span>
+                            <span className="font-semibold dark:text-gray-200">{formatCurrency(otrosMedios)}</span>
                         </div>
+                        <div className="flex justify-between items-center pt-2 border-t border-gray-300 dark:border-gray-600">
+                            <span className="font-bold text-gray-700 dark:text-gray-200">Extracción Estimada:</span>
+                            <span className={`text-xl font-bold ${extraccionEstimada < 0 ? 'text-red-500' : 'text-blue-600'}`}>
+                                {formatCurrency(extraccionEstimada)}
+                            </span>
+                        </div>
+                        <p className="text-xs text-center text-gray-500 mt-1 dark:text-gray-400">
+                            (Efectivo Físico - Remanente)
+                        </p>
                     </div>
 
                     <div className="mb-6">
@@ -170,28 +212,12 @@ export const CierreCajaPanel = () => {
                         />
                     </div>
 
-                    {summary.total_obra_social > 0 && (
-                        <div className="mb-6 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg flex items-start gap-3">
-                            <input
-                                type="checkbox"
-                                id="genLiquidacion"
-                                checked={generarLiquidaciones}
-                                onChange={(e) => setGenerarLiquidaciones(e.target.checked)}
-                                className="mt-1 w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
-                            />
-                            <label htmlFor="genLiquidacion" className="text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
-                                <span className="font-bold block">Generar borradores de liquidación para Obras Sociales</span>
-                                Se crearán registros en estado 'BORRADOR' para facilitar el cobro futuro.
-                            </label>
-                        </div>
-                    )}
-
                     <button
                         onClick={handleClose}
                         disabled={calculating || summary.total_general === 0}
                         className={`w-full py-4 rounded-lg font-bold text-lg text-white transition-colors ${summary.total_general === 0
                             ? 'bg-gray-400 cursor-not-allowed'
-                            : 'bg-blue-600 hover:bg-blue-700 shadow-lg hover:shadow-xl'
+                            : 'bg-green-600 hover:bg-green-700 shadow-lg hover:shadow-xl'
                             }`}
                     >
                         {calculating ? 'Procesando Cierre...' : 'EJECUTAR CIERRE DE CAJA'}

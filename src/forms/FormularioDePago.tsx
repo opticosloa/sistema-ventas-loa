@@ -52,7 +52,9 @@ export const FormularioDePago: React.FC = () => {
     setSelectedObraSocialId,
     nroOrden,
     setNroOrden,
-    handleCoverInsurance
+    handleCoverInsurance,
+    isDirectSale,
+    handlePayOnPickup
   } = usePaymentLogic();
 
   return (
@@ -115,7 +117,7 @@ export const FormularioDePago: React.FC = () => {
               loading={loading}
               currentTotal={currentTotal}
               onPay={onSubmit}
-              onAuthorize={() => setSupervisorModalOpen(true)}
+              onAuthorize={isDirectSale ? undefined : handlePayOnPickup}
             />
           </div>
         </div>

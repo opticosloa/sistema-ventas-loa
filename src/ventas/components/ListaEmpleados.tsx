@@ -17,9 +17,19 @@ const formatDate = (iso?: string) =>
 const formatCurrency = (n?: number) =>
   n === undefined ? "-" : new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(n);
 
+const getAvailableRoles = (currentUserRole?: string | null) => {
+  if (currentUserRole === 'SUPERADMIN') {
+    return ['ADMIN', 'EMPLEADO', 'TALLER'];
+  }
+  if (currentUserRole === 'ADMIN') {
+    return ['EMPLEADO', 'TALLER'];
+  }
+  return [];
+};
+
 export const ListaEmpleados: React.FC = () => {
   const queryClient = useQueryClient();
-  const { role: userRole, email: userEmail } = useAuthStore();
+  const { role: userRole, email: userEmail, sucursal_id } = useAuthStore();
 
   const { data: empleados = [], isSuccess } = useQuery({
     queryKey: ['users'],
@@ -36,8 +46,10 @@ export const ListaEmpleados: React.FC = () => {
       const payload = {
         ...newEmp,
         password_hash: newEmp.password,
-        sucursal_id: 1 // Default sucursal
+        sucursal_id: sucursal_id, // Default sucursal
+        is_active: true
       };
+      console.log(payload);
       return await LOAApi.post('/api/users', payload);
     },
     onSuccess: () => {
@@ -193,7 +205,9 @@ export const ListaEmpleados: React.FC = () => {
         </div>
 
         <div className="flex gap-2 items-center">
-          <button onClick={openForm} className="btn-primary px-3 py-2 text-sm">Agregar Nuevo</button>
+          {(userRole === 'SUPERADMIN' || userRole === 'ADMIN') && (
+            <button onClick={openForm} className="btn-primary px-3 py-2 text-sm">Agregar Nuevo</button>
+          )}
           <div className="text-sm text-crema/80">Resultados: <span className="font-medium text-white">{filtered.length}</span></div>
         </div>
       </div>
@@ -544,15 +558,18 @@ export const ListaEmpleados: React.FC = () => {
 
               <label className="flex flex-col gap-1">
                 <span className="text-sm text-black">Rol <span className='text-red-600'>*</span></span>
-                <input
-                  type="text"
+                <select
                   name="rol"
-                  placeholder="Rol"
                   value={newEmpleado.rol}
                   onChange={handleInputChange}
                   className="input"
                   required
-                />
+                >
+                  <option value="">Seleccionar un rol</option>
+                  {getAvailableRoles(userRole).map(role => (
+                    <option key={role} value={role}>{role}</option>
+                  ))}
+                </select>
               </label>
 
               <label className="flex flex-col gap-1">

@@ -32,11 +32,15 @@ export const CashService = {
         return response.data.result;
     },
 
-    performClosing: async (monto_real: number, observaciones?: string): Promise<CloseResponse> => {
+    performClosing: async (monto_real: number, observaciones?: string, monto_remanente?: number, efectivo_fisico?: number): Promise<Blob> => {
         const response = await LOAApi.post(`${API_URL}/close`, {
             monto_real,
-            observaciones
+            observaciones,
+            monto_remanente,
+            efectivo_fisico
+        }, {
+            responseType: 'blob'
         });
-        return response.data.result;
+        return response.data;
     }
 };

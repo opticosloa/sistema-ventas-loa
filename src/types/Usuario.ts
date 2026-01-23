@@ -11,4 +11,5 @@ export interface Usuario {
     created_at?: string;
     updated_at?: string;
     sucursal_id: string;
+    max_descuento?: number;
 }

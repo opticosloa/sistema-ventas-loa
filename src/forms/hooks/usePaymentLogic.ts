@@ -26,6 +26,7 @@ export interface UsePaymentLogicReturn {
     supervisorModalOpen: boolean;
     setSupervisorModalOpen: (val: boolean) => void;
     handleSupervisorSuccess: (name: string) => void;
+    handlePayOnPickup: () => void;
 
     // Add Payment Form
     selectedMethod: MetodoPago | '';
@@ -64,6 +65,7 @@ export interface UsePaymentLogicReturn {
     nroOrden: string;
     setNroOrden: (val: string) => void;
     handleCoverInsurance: () => void;
+    isDirectSale: boolean;
 }
 
 export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLogicReturn => {
@@ -73,6 +75,7 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
     const { uid } = useAppSelector(state => state.auth);
     const stateVentaId = location.state?.ventaId;
     const stateTotal = location.state?.total;
+    const isDirectSaleState = location.state?.isDirectSale || false;
 
     /* New States */
     const [ventaId, setVentaId] = useState<string | number | null>(overrideVentaId || paramVentaId || stateVentaId || null);
@@ -85,6 +88,7 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
     const [saleItems, setSaleItems] = useState<any[]>([]);
     const [dniSearch, setDniSearch] = useState("");
     const [currentTotal, setCurrentTotal] = useState<number>(stateTotal ? parseFloat(stateTotal) : 0);
+    const [isDirectSale, setIsDirectSale] = useState(isDirectSaleState);
 
     // States for Supervisor Auth
     const [supervisorModalOpen, setSupervisorModalOpen] = useState(false);
@@ -133,6 +137,7 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
         if (state?.ventaId) {
             setVentaId(state.ventaId);
             if (state.total) setCurrentTotal(state.total);
+            if (state.isDirectSale !== undefined) setIsDirectSale(state.isDirectSale);
         }
     }, [location]);
 
@@ -495,8 +500,21 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
         const isFullyPaid = restante <= 0.01;
         const isMinimoCubierto = totalPagadoReal >= (montoMinimo - 100); // Margen de error $100
 
-        // Si NO está saldo completo Y NO cumple el mínimo -> Validar Supervisor
-        if (!isFullyPaid && !isMinimoCubierto) {
+        // Si es Venta Directa -> NO PERMITIR SEÑA (Debe ser pago total)
+        if (isDirectSale) {
+            if (!isFullyPaid) {
+                Swal.fire({
+                    title: 'Pago Incompleto',
+                    text: 'Las ventas directas requieren el pago total de los productos.',
+                    icon: 'warning',
+                    confirmButtonText: 'Entendido'
+                });
+                return;
+            }
+        }
+
+        // Si NO es venta directa, aplicar regla del 30%
+        if (!isDirectSale && !isFullyPaid && !isMinimoCubierto) {
             // Si hay nuevos pagos pendientes de guardar, advertir que primero se validará
             Swal.fire({
                 title: 'Seña Insuficiente',
@@ -525,7 +543,7 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
             Swal.fire("Éxito", "Venta guardada correctamente.", "success");
 
             // Crear Ticket si corresponde (aunque si ya estaba paga, quizas ya se dio, pero no esta de mas validar en back)
-            if (ventaId && clientId && uid) {
+            if (!isDirectSale && ventaId && clientId && uid) {
                 try {
                     await LOAApi.post('/api/tickets', {
                         venta_id: ventaId,
@@ -540,7 +558,7 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
             }
 
             // Intentar abrir PDF si corresponde
-            if (ventaId) openLabOrderPdf(ventaId);
+            if (!isDirectSale && ventaId) openLabOrderPdf(ventaId);
 
             return navigate(`/nueva-venta`);
         }
@@ -579,7 +597,7 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
             }
 
             // CREAR TICKET AUTOMÁTICAMENTE
-            if (ventaId && clientId && uid) {
+            if (!isDirectSale && ventaId && clientId && uid) {
                 await LOAApi.post('/api/tickets', {
                     venta_id: ventaId,
                     cliente_id: clientId,
@@ -590,7 +608,7 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
             }
 
             // ABRIR PDF AUTOMATICAMENTE
-            if (ventaId) openLabOrderPdf(ventaId);
+            if (!isDirectSale && ventaId) openLabOrderPdf(ventaId);
 
             fetchExistingPayments(ventaId!.toString());
             setPagos([]);
@@ -719,6 +737,25 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
         }
     };
 
+    const handlePayOnPickup = async () => {
+        try {
+            setLoading(true);
+            // 1. Update observation (Optional, to mark it was withdrawn without full payment)
+            // await LOAApi.put(`/api/sales/${ventaId}/observation`, {
+            //     observation: `RETIRO SIN PAGO TOTAL (Auto-Autorizado)`
+            // });
+
+            // 2. Proceed to save
+            const paymentsToSave = pagos.filter(p => !p.confirmed || !p.readonly);
+            await processSale(paymentsToSave);
+
+        } catch (error) {
+            console.error("Error updating sale observation:", error);
+            Swal.fire("Error", "Error al registrar retiro. Intente nuevamente.", "error");
+            setLoading(false);
+        }
+    };
+
     useEffect(() => {
         if (restante > 0 && amountInput === '0.00' && !selectedMethod) {
             setAmountInput(restante.toFixed(2));
@@ -750,6 +787,7 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
         supervisorModalOpen,
         setSupervisorModalOpen,
         handleSupervisorSuccess,
+        handlePayOnPickup,
         selectedMethod,
         setSelectedMethod,
         amountInput,
@@ -775,6 +813,7 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
         setSelectedObraSocialId,
         nroOrden,
         setNroOrden,
-        handleCoverInsurance
+        handleCoverInsurance,
+        isDirectSale
     };
 };

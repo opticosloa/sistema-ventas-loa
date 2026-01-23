@@ -24,26 +24,94 @@ export const FormularioDeEntregaTicket: React.FC = () => {
 
     // --- QUERIES ---
 
-    // 1. List Tickets (Ready to Deliver)
+    // 1. List Tickets (Ready to Deliver + In Progress)
     const { data: tickets = [], isLoading: loadingTickets } = useQuery({
-        queryKey: ['tickets', 'LISTO'],
+        queryKey: ['tickets', 'delivery-panel'],
         queryFn: async () => {
-            const { data } = await LOAApi.get<{ success: boolean, result: TicketDetail[] }>('/api/tickets?estado=LISTO');
-            return data.result || [];
+            // Fetch ALL active tickets (let backend return all or filter here)
+            // Removing status param might return everything including delivered/cancelled if backend defaults to 'all'.
+            // sp_ticket_listar filters by p_estado if provided, else all.
+            const { data } = await LOAApi.get<{ success: boolean, result: TicketDetail[] }>('/api/tickets');
+
+            // Filter locally to match requirement: PENDIENTE, EN_TALLER, LISTO
+            const allowed = ['PENDIENTE', 'EN_TALLER', 'LISTO'];
+            return (data.result || [])
+                .filter(t => allowed.includes(t.estado))
+                .sort((a, b) => {
+                    // Priority: LISTO first
+                    if (a.estado === 'LISTO' && b.estado !== 'LISTO') return -1;
+                    if (a.estado !== 'LISTO' && b.estado === 'LISTO') return 1;
+                    return 0;
+                });
         }
     });
 
-    // 2. Fetch Selected Ticket Detail (to act as Single Source of Truth for detail view)
+    // 2. Fetch Selected Ticket Detail + Last Prescription (Hydration)
     const { data: selectedTicket, isLoading: loadingDetail } = useQuery({
-        queryKey: ['ticket', selectedTicketId],
+        queryKey: ['ticket-with-prescription', selectedTicketId],
         queryFn: async () => {
             if (!selectedTicketId) return null;
-            const { data } = await LOAApi.get<{ success: boolean, result: TicketDetail }>(`/api/tickets/${selectedTicketId}`);
-            return data.result;
-        },
-        enabled: !!selectedTicketId
-    });
+            // PASO A: Traer el Ticket Básico
+            const ticketRes = await LOAApi.get(`/api/tickets/${selectedTicketId}`);
+            const ticketData = ticketRes.data.result || ticketRes.data;
 
+            if (!ticketData) {
+                return null;
+            }
+            if (!ticketData.cliente_id) {
+                return ticketData;
+            }
+            // PASO B: Traer la última prescripción usando la nueva ruta
+            try {
+                const prescriptionRes = await LOAApi.get(`/api/prescriptions/last/${ticketData.cliente_id}`);
+                const prescriptionData = prescriptionRes.data.result;
+
+                if (prescriptionData) {
+                    // --- FUNCIÓN DE NORMALIZACIÓN ---
+                    const normalizeEye = (eye: any) => {
+                        if (!eye) return null;
+                        return {
+                            // Mapeamos lo que viene del back (esfera/cilindro) a lo que espera el front (esf/cil)
+                            esf: eye.esfera ?? "0",
+                            cil: eye.cilindro ?? "0",
+                            eje: eye.eje ?? "0"
+                        };
+                    };
+                    // --- CONSTRUCCIÓN DEL OBJETO RECETA ---
+                    ticketData.receta = {
+                        // Buscamos datos generales (Armazón, Color, Tipo) preferentemente en 'lejos'
+                        armazon: prescriptionData.lejos?.armazon || prescriptionData.cerca?.armazon || "No especificado",
+                        color: prescriptionData.lejos?.color || "N/A",
+                        tipo_cristal: prescriptionData.lejos?.tipo || "N/A",
+                        obra_social: prescriptionData.obra_social || "N/A",
+
+                        // Mapeamos las secciones ópticas
+                        lejos: {
+                            OD: normalizeEye(prescriptionData.lejos?.OD),
+                            OI: normalizeEye(prescriptionData.lejos?.OI)
+                        },
+                        cerca: {
+                            OD: normalizeEye(prescriptionData.cerca?.OD),
+                            OI: normalizeEye(prescriptionData.cerca?.OI)
+                        },
+                        multifocal: {
+                            OD: normalizeEye(prescriptionData.multifocal?.OD),
+                            OI: normalizeEye(prescriptionData.multifocal?.OI)
+                        }
+                    };
+                } else {
+                    ticketData.receta = null;
+                }
+                return ticketData;
+            } catch (err) {
+                // Retornamos el ticket aunque falle la prescripción para no bloquear la entrega
+                ticketData.receta = null;
+                return ticketData;
+            }
+        },
+        enabled: !!selectedTicketId,
+        staleTime: 1000 * 30 // Cache de 30 segundos para evitar recargas constantes
+    });
     // 3. Client Debt (Only if ticket selected)
     const { data: debtData } = useQuery({
         queryKey: ['client-debt', selectedTicket?.cliente_id],
@@ -63,10 +131,9 @@ export const FormularioDeEntregaTicket: React.FC = () => {
 
 
     // --- LOCAL FORM STATE ---
-    const [localSelectedMethod, setLocalSelectedMethod] = useState<string>(''); // Local state to handle MP_POINT/QR options
+    const [localSelectedMethod, setLocalSelectedMethod] = useState<string>('');
 
     // --- HOOKS ---
-    // Payment Logic - Linked to Selected Ticket's Sale
     const paymentLogic = usePaymentLogic(selectedTicket?.venta_id);
     const {
         asyncPaymentStatus,
@@ -91,17 +158,9 @@ export const FormularioDeEntregaTicket: React.FC = () => {
     }, [hookPayments, selectedTicket?.cliente_id, queryClient]);
 
 
-    // Validation Effect: If ticket selected and debt > 0, show Alert
-    useEffect(() => {
-        if (selectedTicket && debtData && Number(debtData.cuenta_corriente) > 0) {
-            // Logic handled by UI rendering
-        }
-    }, [selectedTicket, debtData]);
-
     const handleSelectTicket = (ticket: TicketDetail) => {
         setSelectedTicketId(ticket.ticket_id);
-        setLocalSelectedMethod(''); // Reset method
-        // Force refresh of debt
+        setLocalSelectedMethod('');
         queryClient.invalidateQueries({ queryKey: ['client-debt', ticket?.cliente_id] });
     };
 
@@ -125,12 +184,8 @@ export const FormularioDeEntregaTicket: React.FC = () => {
 
     // --- HANDLERS ---
     const handleSearchDni = async () => {
-        if (!searchTerm) {
-            // If empty, maybe reset list?
-            return;
-        }
+        if (!searchTerm) return;
 
-        // 1. Search in Local LISTO list
         const foundLocal = tickets.find(t =>
             t.cliente_nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
             t.cliente_apellido.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -144,10 +199,8 @@ export const FormularioDeEntregaTicket: React.FC = () => {
             return;
         }
 
-        // 2. Fallback: Search Server-side in ANY state
         try {
             Swal.showLoading();
-            // Assuming endpoint supports 'search' param and we omit 'estado' to get all
             const { data } = await LOAApi.get<{ success: boolean, result: TicketDetail[] | TicketDetail }>(`/api/tickets?search=${searchTerm}`);
             Swal.close();
 
@@ -159,14 +212,9 @@ export const FormularioDeEntregaTicket: React.FC = () => {
             }
 
             if (matches.length > 0) {
-                // Pick the most relevant? (e.g. latest, or the one matching input best)
-                // For simplified UX, pick first or show list.
                 const match = matches[0];
-
                 if (match.estado === 'LISTO') {
-                    // It should have been in the list, but maybe list is stale or paginated?
-                    // Select it.
-                    queryClient.invalidateQueries({ queryKey: ['tickets', 'LISTO'] }); // refresh list
+                    queryClient.invalidateQueries({ queryKey: ['tickets', 'LISTO'] });
                     handleSelectTicket(match);
                     Swal.fire("Encontrado", `Ticket cargado (Estado: LISTO)`, "success");
                 } else {
@@ -175,8 +223,6 @@ export const FormularioDeEntregaTicket: React.FC = () => {
                         text: `El pedido de ${match.cliente_nombre} se encuentra en estado: ${match.estado}.\nFecha Estimada: ${new Date(match.fecha_entrega_estimada).toLocaleDateString()}`,
                         icon: 'warning'
                     });
-                    // Optionally show it anyway? Usually Delivery Page only for Ready items.
-                    // We WON'T select it to avoid confusion, just warn.
                 }
             } else {
                 Swal.fire("Info", "No se encontró ningún pedido con ese criterio.", "info");
@@ -190,21 +236,16 @@ export const FormularioDeEntregaTicket: React.FC = () => {
 
     const handleScanSuccess = async (decodedText: string) => {
         setShowScanner(false);
-        // Assume decodedText is TicketID or VentaID
-        // Try to find in current list
         const found = tickets.find(t => t.ticket_id === decodedText || t.venta_id === decodedText);
 
         if (found) {
             handleSelectTicket(found);
             Swal.fire("Encontrado", `Ticket #${found.ticket_id.substring(0, 8)} cargado.`, "success");
         } else {
-            // Maybe fetch it individually in case it's not in the cached list (e.g. status change just happened)
             try {
                 const { data } = await LOAApi.get<{ success: boolean, result: TicketDetail }>(`/api/tickets/${decodedText}`);
                 if (data.success && data.result) {
                     if (data.result.estado === 'LISTO') {
-                        // Add to list cache potentially? Or just select it.
-                        // We can force select it even if not in list.
                         setSelectedTicketId(data.result.ticket_id);
                         Swal.fire("Encontrado", "Ticket cargado.", "success");
                     } else {
@@ -251,11 +292,7 @@ export const FormularioDeEntregaTicket: React.FC = () => {
             Swal.fire("Pago Registrado", "La deuda ha sido actualizada.", "success");
             setAmountInput("");
             setLocalSelectedMethod("");
-            // Refresh
             queryClient.invalidateQueries({ queryKey: ['client-debt', selectedTicket.cliente_id] });
-            // We cannot call fetchExistingPayments directly from hook results if not exposed
-            // But invalidating client-debt is enough for the button logic to update.
-            // The hookPayments will auto-update on polling if needed, or we just trust the new state.
         } catch (error) {
             console.error(error);
             Swal.fire("Error", "Error registrando pago", "error");
@@ -285,23 +322,16 @@ export const FormularioDeEntregaTicket: React.FC = () => {
 
     const handlePrintReceipt = () => {
         if (!selectedTicket) return;
-        // Assuming there is a receipt endpoint or we use the Lab Order one as a fallback/example
-        // Prompt says "Recibo de entrega". Let's assume a new endpoint or the standard order.
-        // For now, using standard order PDF as placeholder if specific receipt doesn't exist.
-        // Or better: open a "Comprobante" window.
         window.open(`${LOAApi.defaults.baseURL}/api/sales/${selectedTicket.venta_id}/receipt`, '_blank');
     }
 
     const handleSupervisorSuccess = async (supervisorName: string) => {
         if (!selectedTicket) return;
-        // Authorize delivery with debt
         try {
             setSupervisorModalOpen(false);
-            // Add observation
             await LOAApi.put(`/api/sales/${selectedTicket.venta_id}/observation`, {
                 observation: `ENTREGA AUTORIZADA CON DEUDA ($${clientDebt}) POR SUPERVISOR: ${supervisorName}`
             });
-            // Deliver
             deliverMutation.mutate(selectedTicket.ticket_id);
         } catch (error) {
             Swal.fire("Error", "Fallo la autorización", "error");
@@ -382,10 +412,15 @@ export const FormularioDeEntregaTicket: React.FC = () => {
                             >
                                 <div className="flex justify-between items-start mb-1">
                                     <span className="font-bold text-gray-800 text-sm">{t.cliente_nombre} {t.cliente_apellido}</span>
-                                    <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">LISTO</span>
+                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${t.estado === 'LISTO'
+                                        ? 'bg-green-100 text-green-700'
+                                        : 'bg-yellow-100 text-yellow-800'
+                                        }`}>
+                                        {t.estado}
+                                    </span>
                                 </div>
-                                <div className="text-xs text-gray-500 mb-1">Ticket #{t.ticket_id.substring(0, 8)}</div>
-                                <div className="text-[11px] text-crema flex items-center gap-1">
+                                <div className="text-xs text-gray-600 mb-1">Ticket #{t.ticket_id.substring(0, 8)}</div>
+                                <div className="text-[11px] text-gray-500 flex items-center gap-1">
                                     <span>📅 Estimada: {new Date(t.fecha_entrega_estimada).toLocaleDateString()}</span>
                                 </div>
                             </div>
@@ -420,18 +455,18 @@ export const FormularioDeEntregaTicket: React.FC = () => {
                                 </p>
                             </div>
                             <div className="flex gap-3">
-                                {/* Only show Print if Delivered? Usually before. Optional. */}
                                 <button onClick={handlePrintReceipt} className="btn-secondary text-sm flex items-center gap-2">
                                     🖨️ Comprobante
                                 </button>
                                 <button
                                     onClick={handleConfirmDeliver}
-                                    disabled={clientDebt > 0 || deliverMutation.isPending}
+                                    disabled={clientDebt > 0 || deliverMutation.isPending || selectedTicket.estado !== 'LISTO'}
                                     className={`px-5 py-2 rounded-lg font-bold shadow-lg transition flex items-center gap-2 text-white
-                                        ${clientDebt > 0
+                                    ${clientDebt > 0 || selectedTicket.estado !== 'LISTO'
                                             ? 'bg-gray-400 cursor-not-allowed'
                                             : 'bg-green-600 hover:bg-green-700 shadow-green-200'
                                         }`}
+                                    title={selectedTicket.estado !== 'LISTO' ? 'Solo se pueden entregar pedidos LISTOS' : ''}
                                 >
                                     {deliverMutation.isPending ? 'Procesando...' : 'CONFIRMAR ENTREGA'}
                                     {clientDebt > 0 && '🔒'}
@@ -491,8 +526,6 @@ export const FormularioDeEntregaTicket: React.FC = () => {
                                                     <option value="">Seleccione...</option>
                                                     <option value="EFECTIVO">Efectivo 💵</option>
                                                     <option value="TRANSFERENCIA">Transferencia 🏦</option>
-                                                    <option value="DEBITO">Débito 💳</option>
-                                                    <option value="CREDITO">Crédito 💳</option>
                                                     <option value="MP_QR">Mercado Pago QR 📱</option>
                                                     <option value="MP_POINT">Mercado Pago Point 📟</option>
                                                 </select>
@@ -542,48 +575,77 @@ export const FormularioDeEntregaTicket: React.FC = () => {
 
                         {/* TICKET DETAILS (RECIPE) */}
                         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                            <div className="bg-gray-50 px-6 py-3 border-b border-gray-100">
-                                <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wide">Detalle del Pedido</h3>
+                            <div className="bg-gray-50 px-6 py-3 border-b border-gray-100 flex justify-between items-center">
+                                <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wide">Detalle Técnico (Última Prescripción)</h3>
+                                {selectedTicket && selectedTicket.receta && selectedTicket.receta.obra_social && (
+                                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-semibold">
+                                        {selectedTicket.receta.obra_social}
+                                    </span>
+                                )}
                             </div>
                             <div className="p-6">
-                                {/* Armazon */}
-                                {selectedTicket.receta?.armazon && (
-                                    <div className="mb-6">
-                                        <div className="text-xs text-gray-500 uppercase font-bold mb-1">Armazón / Modelo</div>
-                                        <div className="p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-blue-900 font-medium">
-                                            👓 {selectedTicket.receta.armazon}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Receta Grid */}
-                                <div className="grid grid-cols-1 gap-6">
-                                    {['lejos', 'cerca', 'multifocal'].map((tipo) => {
-                                        const r = selectedTicket.receta?.[tipo as keyof typeof selectedTicket.receta] as any;
-                                        if (!r) return null;
-                                        return (
-                                            <div key={tipo} className="border rounded-xl overflow-hidden">
-                                                <div className="bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600 uppercase text-center block w-full">{tipo}</div>
-                                                <div className="grid grid-cols-2 divide-x divide-gray-100">
-                                                    {['OD', 'OI'].map(ojo => (
-                                                        <div key={ojo} className="p-4">
-                                                            <div className="text-center font-bold text-cyan-700 mb-2">{ojo}</div>
-                                                            <div className="space-y-1 text-sm text-center">
-                                                                {r[ojo] ? (
-                                                                    <>
-                                                                        <div><span className="text-crema text-xs">ESF:</span> <span className="font-mono">{r[ojo].esf}</span></div>
-                                                                        <div><span className="text-crema text-xs">CIL:</span> <span className="font-mono">{r[ojo].cil}</span></div>
-                                                                        <div><span className="text-crema text-xs">EJE:</span> <span className="font-mono">{r[ojo].eje}°</span></div>
-                                                                    </>
-                                                                ) : <span className="text-gray-300">-</span>}
-                                                            </div>
-                                                        </div>
-                                                    ))}
+                                {/* Armazon - Renderizado Condicional Seguro */}
+                                {selectedTicket && selectedTicket.receta ? (
+                                    <>
+                                        <div className="mb-6">
+                                            <div className="text-xs text-gray-500 uppercase font-bold mb-1">Detalles del Armazón y Cristal</div>
+                                            <div className="grid grid-cols-3 gap-2">
+                                                <div className="p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-blue-900">
+                                                    <span className="block text-[10px] uppercase opacity-60">Modelo</span>
+                                                    <span className="font-bold">👓 {selectedTicket.receta.armazon}</span>
+                                                </div>
+                                                <div className="p-3 bg-gray-50/50 border border-gray-100 rounded-lg text-gray-700">
+                                                    <span className="block text-[10px] uppercase opacity-60">Color</span>
+                                                    <span className="font-medium">{selectedTicket.receta.color}</span>
+                                                </div>
+                                                <div className="p-3 bg-gray-50/50 border border-gray-100 rounded-lg text-gray-700">
+                                                    <span className="block text-[10px] uppercase opacity-60">Cristal</span>
+                                                    <span className="font-medium">{selectedTicket.receta.tipo_cristal}</span>
                                                 </div>
                                             </div>
-                                        )
-                                    })}
-                                </div>
+                                        </div>
+
+                                        {/* Receta Grid */}
+                                        <div className="grid grid-cols-1 gap-6">
+                                            {['lejos', 'cerca', 'multifocal'].map((tipo) => {
+                                                const r = selectedTicket.receta?.[tipo as keyof typeof selectedTicket.receta] as any;
+                                                // Solo mostramos la sección si tiene algún dato (ESF, CIL o EJE distintos de 0 o null)
+                                                // O si prefieres mostrar siempre Lejos/Cerca, quita este chequeo opcional.
+                                                // if (!r) return null; 
+
+                                                return (
+                                                    <div key={tipo} className="border rounded-xl overflow-hidden">
+                                                        <div className="bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600 uppercase text-center block w-full">{tipo}</div>
+                                                        <div className="grid grid-cols-2 divide-x divide-gray-100">
+                                                            {['OD', 'OI'].map(ojo => (
+                                                                <div key={ojo} className="p-4">
+                                                                    <div className="text-center font-bold text-cyan-700 mb-2">{ojo}</div>
+                                                                    <div className="space-y-1 text-sm text-center">
+                                                                        {r && r[ojo] ? (
+                                                                            <>
+                                                                                <div><span className="text-gray-700 text-xs">ESF:</span> <span className="font-mono">{r[ojo].esf}</span></div>
+                                                                                <div><span className="text-gray-700 text-xs">CIL:</span> <span className="font-mono">{r[ojo].cil}</span></div>
+                                                                                <div><span className="text-gray-700 text-xs">EJE:</span> <span className="font-mono">{r[ojo].eje}°</span></div>
+                                                                            </>
+                                                                        ) : <span className="text-gray-300">-</span>}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="p-8 text-center border-2 border-dashed border-gray-200 rounded-xl bg-gray-50">
+                                        <p className="text-gray-600 font-medium">No se encontraron prescripciones registradas.</p>
+                                        <p className="text-xs text-gray-400 mt-1">
+                                            Cliente ID: {selectedTicket.cliente_id.substring(0, 8)}
+                                        </p>
+                                        <p className="text-xs mt-2 text-blue-500">Puede entregar el pedido basándose en la orden física.</p>
+                                    </div>
+                                )}
                             </div>
                         </div>
 
