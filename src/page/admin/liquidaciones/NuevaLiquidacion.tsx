@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
 import { useNavigate } from 'react-router-dom';
 import LOAApi from '../../../api/LOAApi';
-import type { ObraSocial } from '../../../types/ObrasSociales';
 import type { ItemLiquidacion } from '../../../types/Liquidacion';
+import type { ObraSocial } from '../../../types/ObraSocial';
 
 export const NuevaLiquidacion: React.FC = () => {
     const navigate = useNavigate();
