@@ -9,6 +9,8 @@ export type FormValues = {
   clienteDNI: string;
   clienteNameVendedor: string;
   clienteObraSocial: string;
+  clienteFechaNacimiento?: string;
+  clienteEmail?: string;
 
   // Doctor
   doctorMatricula: string;

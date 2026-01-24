@@ -68,7 +68,21 @@ const initialForm: FormValues = {
 
 export const FormularioVenta: React.FC = () => {
   const { max_descuento = 0, nombre, apellido } = useAuthStore();
-  const { formState, onInputChange, onResetForm, setFieldValue } = useForm(initialForm);
+  const { formState, onInputChange, onResetForm, setFieldValue, setFormState } = useForm(initialForm);
+
+  // Nuevo: Handler para actualizaciones masivas (evita race conditions)
+  const handleBulkUpdate = (updates: Partial<FormValues>) => {
+    // Si useForm no expone setFormState (lo verificaremos), usamos setFieldValue en bucle o modificamos useForm.
+    // Asumiendo que useForm expone setFormState o podemos implementarlo.
+    if (setFormState) {
+      setFormState((prev: any) => ({ ...prev, ...updates }));
+    } else {
+      // Fallback: itera, pero es riesgoso. Mejor editar useForm.
+      Object.entries(updates).forEach(([key, value]) => {
+        setFieldValue(key as keyof FormValues, value as string);
+      });
+    }
+  };
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
@@ -269,8 +283,8 @@ export const FormularioVenta: React.FC = () => {
     const currentSubtotal = subtotalBruto > 0 ? subtotalBruto : 1;
     const percentage = (discount / currentSubtotal) * 100;
 
-    // 3. Check if within max_descuento limit
-    if (percentage <= max_descuento) {
+    // 3. Check if within max_descuento limit (with tolerance for float precision)
+    if (percentage <= max_descuento + 0.01) {
       setIsDiscountAuthorized(true);
     } else {
       // 4. If exceeds, check if manually authorized
@@ -866,15 +880,34 @@ export const FormularioVenta: React.FC = () => {
 
       } else {
         // Direct Sale Only
+        // Direct Sale Only
+        const saleItems = cart.map(item => {
+          const prod = item.producto as any;
+          const usd = prod.precio_usd ? parseFloat(prod.precio_usd) : 0;
+          const ars = prod.precio_venta ? parseFloat(prod.precio_venta) : 0;
+          // Consistent pricing logic with subtotalBruto
+          const basePrice = (usd > 0 && dolarRate > 0) ? (usd * dolarRate) : ars;
+
+          return {
+            producto_id: item.producto.producto_id,
+            cantidad: item.cantidad,
+            precio_unitario: basePrice
+          };
+        });
+
+        // ADD EXTRA PRICE TO FIRST ITEM IF EXISTS (Direct Sale)
+        if (extraPrice > 0 && saleItems.length > 0) {
+          const firstItem = saleItems[0];
+          if (firstItem.cantidad > 0) {
+            firstItem.precio_unitario += (extraPrice / firstItem.cantidad);
+          }
+        }
+
         const salePayload = {
           cliente_id: finalClienteId,
           urgente: false,
           descuento: isDiscountAuthorized ? discount : 0,
-          items: cart.map(item => ({
-            producto_id: item.producto.producto_id,
-            cantidad: item.cantidad,
-            precio_unitario: (item.producto.precio_usd * dolarRate)
-          }))
+          items: saleItems
         };
         const saleRes = await LOAApi.post('/api/sales', salePayload);
         ventaId = saleRes.data.venta_id;
@@ -935,8 +968,9 @@ export const FormularioVenta: React.FC = () => {
 
         {/* SECTION: CLIENT (Common) */}
         <ClientForm
-          formState={formState as FormValues}
-          onInputChange={handleInputChangeWrapped}
+          formState={formState}
+          onInputChange={onInputChange}
+          onBulkUpdate={handleBulkUpdate}
           handleSearchClick={handleSearchClick}
           loading={loading}
           formErrors={formErrors}

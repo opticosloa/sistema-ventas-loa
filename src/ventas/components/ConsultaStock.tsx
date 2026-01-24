@@ -8,6 +8,8 @@ import { RefreshButton } from "../../components/ui/RefreshButton";
 import { getCristalStock } from "../../services/stock.api";
 import type { CrystalMaterial } from "../../services/crystals.api";
 import { getMaterials } from "../../services/crystals.api";
+import { useNavigate } from "react-router-dom";
+import { useAuthStore } from "../../hooks";
 
 const ITEMS_PER_PAGE = 25;
 
@@ -19,6 +21,8 @@ const statusBadge = (stock: number) => {
 
 export const ConsultaStock: React.FC = () => {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const { role } = useAuthStore();
 
   // 2. Local State (Moved up for dependencies)
   const [query, setQuery] = useState("");
@@ -213,6 +217,15 @@ export const ConsultaStock: React.FC = () => {
         </div>
 
         <div className="flex gap-2 items-center">
+          {role === 'SUPERADMIN' && (
+            <button
+              onClick={() => navigate('/admin/productos/importar')}
+              className="px-4 py-1.5 rounded-md text-sm font-medium bg-green-600 text-white hover:bg-green-700 shadow flex items-center gap-2"
+            >
+              <span>Importar (Excel)</span>
+            </button>
+          )}
+
           <div className="flex bg-gray-700/50 p-1 rounded-lg">
             <button
               onClick={() => setActiveInfoTab('products')}

@@ -1,5 +1,5 @@
 import { Routes, Route } from 'react-router-dom';
-import { Navbar, ConsultaStock, ConsultaCliente, TicketList, TicketsHistorial, Estadisticas, ListaEmpleados, Home, ListaTicketsTaller, ConfiguracionPage, CierreCajaPage, ListaMarcas, ListaProveedores, ListaObrasSociales, DoctorManagementPage } from '../ventas/components';
+import { Navbar, ConsultaStock, ConsultaCliente, TicketList, TicketsHistorial, Estadisticas, ListaEmpleados, Home, ListaTicketsTaller, ConfiguracionPage, CierreCajaPage, ListaMarcas, ListaProveedores, ListaObrasSociales, DoctorManagementPage, BulkProductImporter } from '../ventas/components';
 import { LoginPage, NotFoundPage, PagoResultadoPage, UnAuthorized, DevolucionesPage } from '../ventas/page';
 import { HomePage, EmpleadoHomePage, TallerHomePage } from '../page';
 import { AuthGuard, RoleGuard, TenantGuard } from '../auth/guards';
@@ -49,6 +49,7 @@ export const AppRouter = () => {
 
                 <Route element={<RoleGuard allowedRoles={['SUPERADMIN']} />}>
                   <Route path="productos/nuevo" element={<FormularioProducto />} />
+                  <Route path="productos/importar" element={<BulkProductImporter />} />
                   <Route path="cristales/nuevo" element={<FormularioCristal />} />
                 </Route>
               </Route>

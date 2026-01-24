@@ -29,3 +29,9 @@ export const updatePricesByBrand = async (marca_id: string, porcentaje: number):
     });
     return data;
 };
+
+export const bulkUpsertProducts = async (items: any[]): Promise<any> => {
+    const { data } = await LOAApi.post('/api/products/bulk-upsert', { items });
+    return data;
+};
+

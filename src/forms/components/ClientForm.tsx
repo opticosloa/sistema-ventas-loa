@@ -10,6 +10,7 @@ import type { Cliente } from '../../types/Cliente';
 interface ClientFormProps {
     formState: FormValues;
     onInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
+    onBulkUpdate?: (updates: Partial<FormValues>) => void; // Para actualizaciones masivas sin race-conditions
     handleSearchClick: () => void;
     loading: boolean;
     formErrors?: Record<string, string>;
@@ -19,6 +20,7 @@ interface ClientFormProps {
 export const ClientForm: React.FC<ClientFormProps> = ({
     formState,
     onInputChange,
+    onBulkUpdate,
     handleSearchClick,
     loading,
     formErrors = {},
@@ -46,75 +48,134 @@ export const ClientForm: React.FC<ClientFormProps> = ({
         } as React.ChangeEvent<HTMLInputElement>);
     };
 
+    // Helper para normalizar datos del cliente (backend -> form state)
+    const mapClientDataToForm = (data: Partial<Cliente>): Partial<FormValues> => ({
+        clienteDNI: data.dni || '',
+        // Mapeo flexible: intenta nombre/apellido directos o usa clienteName/Prefix si viniera así
+        clienteName: data.nombre || '',
+        clienteApellido: data.apellido || '',
+        clienteFechaNacimiento: formatDateForInput(data.fecha_nacimiento),
+        clienteDomicilio: data.domicilio || '',
+        clienteTelefono: data.telefono || '',
+        clienteEmail: data.email || '',
+    });
+
     const handleClienteEscaneado = async (datos: Partial<Cliente>) => {
         if (!datos || !datos.dni) return;
 
-        let cambioDatos = false;
-        const dniEscaneado = datos.dni; // DNI obtenido del escáner
+        const dniEscaneado = datos.dni;
 
         try {
-            // 1. Buscamos al cliente usando el DNI del ESCÁNER, no el del estado anterior
+            // 1. Buscamos SIEMPRE al cliente primero para ver si existe
             const { data } = await LOAApi.get(`/api/clients/by-dni/${dniEscaneado}`);
-            const clienteData = data.result?.rows?.[0] || data.result?.[0] || data.result;
+            const resultData = data.result || data; // Adapt to potential API response variations
+            const hasRows = resultData?.rows?.length > 0;
+            const clienteExistente = hasRows ? resultData.rows[0] : null;
 
-            if (clienteData) {
-                // 2. Comparamos para ver si hay que actualizar datos viejos en la DB
-                const nombreDistinto = datos.nombre && datos.nombre !== clienteData.nombre;
-                const apellidoDistinto = datos.apellido && datos.apellido !== clienteData.apellido;
-                const fechaDistinta = datos.fecha_nacimiento && datos.fecha_nacimiento !== clienteData.fecha_nacimiento;
+            if (clienteExistente) {
+                // CASO A: El cliente YA EXISTE
+                console.log("Cliente existente encontrado:", clienteExistente);
 
-                if (nombreDistinto || apellidoDistinto || fechaDistinta) {
-                    cambioDatos = true;
-                    // Actualizamos DB con la info nueva del DNI
-                    await LOAApi.put(`/api/clients/${clienteData.cliente_id}`, {
-                        nombre: datos.nombre,
-                        apellido: datos.apellido,
-                        fecha_nacimiento: datos.fecha_nacimiento
+                // Normalizamos con el helper
+                const formUpdates = mapClientDataToForm(clienteExistente);
+                console.log("Datos mappeados al form (Existente):", formUpdates);
+
+                setCliente(clienteExistente);
+
+                // Actualización del formulario
+                if (onBulkUpdate) {
+                    // Si el padre soporta bulk update, usamos eso (Recomendado)
+                    onBulkUpdate({
+                        clienteDNI: formUpdates.clienteDNI as string,
+                        clienteName: formUpdates.clienteName as string,
+                        clienteApellido: formUpdates.clienteApellido as string,
+                        clienteFechaNacimiento: formUpdates.clienteFechaNacimiento as string,
+                        clienteDomicilio: formUpdates.clienteDomicilio as string,
+                        clienteTelefono: formUpdates.clienteTelefono as string,
+                        clienteEmail: (formUpdates as any).clienteEmail as string
                     });
-                    // Actualizar el objeto local si hubo cambios
-                    if (datos.nombre) clienteData.nombre = datos.nombre;
-                    if (datos.apellido) clienteData.apellido = datos.apellido;
-                    if (datos.fecha_nacimiento) clienteData.fecha_nacimiento = datos.fecha_nacimiento;
+                } else {
+                    // Fallback (puede causar race-conditions si el state update es lento)
+                    setManualValue('clienteDNI', formUpdates.clienteDNI as string);
+                    setManualValue('clienteName', formUpdates.clienteName as string);
+                    setManualValue('clienteApellido', formUpdates.clienteApellido as string);
+                    setManualValue('clienteFechaNacimiento', formUpdates.clienteFechaNacimiento as string);
+                    setManualValue('clienteDomicilio', formUpdates.clienteDomicilio as string);
+                    setManualValue('clienteTelefono', formUpdates.clienteTelefono as string);
+                    setManualValue('clienteEmail', (formUpdates as any).clienteEmail as string);
                 }
-                setCliente(clienteData);
+
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Cliente Encontrado',
+                    text: `Datos cargados: ${clienteExistente.nombre} ${clienteExistente.apellido}`,
+                    timer: 2000,
+                    showConfirmButton: false
+                });
 
             } else {
-                // 3. Si no existe, lo creamos automáticamente
-                const res = await LOAApi.post(`/api/clients`, {
-                    dni: datos.dni,
+                // CASO B: Cliente NUEVO
+                // Normalizamos datos escaneados mezclados con defaults
+                const datosEscaneados: Partial<Cliente> = {
+                    dni: dniEscaneado,
                     nombre: datos.nombre,
                     apellido: datos.apellido,
                     fecha_nacimiento: datos.fecha_nacimiento
-                });
+                    // otros campos si el scanner los provee
+                };
 
-                if (res.data && res.data.success) {
-                    const newClient = res.data.result?.rows?.[0] || res.data.result?.[0] || res.data.result;
-                    if (newClient) {
-                        setCliente(newClient);
-                    }
+                const formUpdates = mapClientDataToForm(datosEscaneados);
+                console.log("Datos mappeados al form (Nuevo):", formUpdates);
+
+                // Limpiamos ID para que sea un CREATE
+                setCliente(null);
+
+                if (onBulkUpdate) {
+                    onBulkUpdate({
+                        clienteDNI: formUpdates.clienteDNI as string,
+                        clienteName: formUpdates.clienteName as string,
+                        clienteApellido: formUpdates.clienteApellido as string,
+                        clienteFechaNacimiento: formUpdates.clienteFechaNacimiento as string,
+                    });
+                } else {
+                    // Aplicamos al form
+                    setManualValue('clienteDNI', formUpdates.clienteDNI as string);
+                    setManualValue('clienteName', formUpdates.clienteName as string);
+                    setManualValue('clienteApellido', formUpdates.clienteApellido as string);
+                    setManualValue('clienteFechaNacimiento', formUpdates.clienteFechaNacimiento as string);
+                    // Los demás campos quedan vacíos por defecto en la función map si no vienen en datosEscaneados
                 }
-            }
 
-            // 4. Actualizamos el Formulario (Solución al error ts2345 con ?? '')
-            setManualValue('clienteDNI', dniEscaneado);
-            setManualValue('clienteName', datos.nombre ?? '');
-            setManualValue('clienteApellido', datos.apellido ?? '');
-
-            // Si tienes este campo en tu formState, asegúrate de que exista en los tipos
-            if (datos.fecha_nacimiento) {
-                setManualValue('clienteFechaNacimiento', datos.fecha_nacimiento);
-            }
-
-            if (cambioDatos) {
-                Swal.fire("Actualizado", "✅ Datos del cliente actualizados en el sistema según su DNI", "success");
+                Swal.fire({
+                    icon: 'success',
+                    title: 'DNI Leído',
+                    text: 'Datos cargados. Verifique y guarde para registrar.',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
             }
 
         } catch (error) {
-            console.error("Error al sincronizar cliente escaneado:", error);
-            // Fallback: al menos cargamos los datos en el form aunque falle la API
-            setManualValue('clienteDNI', dniEscaneado);
-            setManualValue('clienteName', datos.nombre ?? '');
-            setManualValue('clienteApellido', datos.apellido ?? '');
+            console.error("Error al buscar cliente escaneado:", error);
+            // Fallback con datos scanneados
+            const formUpdates = mapClientDataToForm(datos);
+            console.log("Datos mappeados al form (Fallback):", formUpdates);
+
+            if (onBulkUpdate) {
+                onBulkUpdate({
+                    clienteDNI: dniEscaneado,
+                    clienteName: formUpdates.clienteName as string,
+                    clienteApellido: formUpdates.clienteApellido as string,
+                    clienteFechaNacimiento: formUpdates.clienteFechaNacimiento as string,
+                });
+            } else {
+                setManualValue('clienteDNI', dniEscaneado);
+                setManualValue('clienteName', formUpdates.clienteName as string);
+                setManualValue('clienteApellido', formUpdates.clienteApellido as string);
+                setManualValue('clienteFechaNacimiento', formUpdates.clienteFechaNacimiento as string);
+            }
+
+            Swal.fire("Atención", "Se leyeron los datos pero hubo un error verificando existencia.", "warning");
         }
     };
 
@@ -210,7 +271,7 @@ export const ClientForm: React.FC<ClientFormProps> = ({
                     <input
                         type="datetime-local"
                         name="clienteFechaRecibido"
-                        value={formatDateForInput(clienteFechaRecibido)}
+                        value={formatDateForInput(clienteFechaRecibido, true)}
                         onChange={onInputChange}
                         className="input"
                         disabled

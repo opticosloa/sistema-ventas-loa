@@ -28,3 +28,4 @@ export * from './UserWidget';
 export * from './ListaMarcas';
 export * from './ListaProveedores';
 export * from './DoctorManagementPage';
+export * from './BulkProductImporter/BulkProductImporter';
