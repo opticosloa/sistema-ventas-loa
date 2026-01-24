@@ -104,6 +104,9 @@ export const FormularioVenta: React.FC = () => {
     cerca: { OD: null, OI: null }
   });
 
+  // State for Last Recipe Date
+  const [lastRecipeDate, setLastRecipeDate] = useState<string | null>(null);
+
   // Consolidated State for IDs and Prices (User Request)
   const [opticItems, setOpticItems] = useState<{
     armazon: { id: string | null, price: number },
@@ -298,6 +301,9 @@ export const FormularioVenta: React.FC = () => {
         setDiscount(0);
         setCalculatedCoverage(0);
       }
+      // Reset Last Recipe Date if OS changes? User said "any data of the recipe". 
+      // OS is part of recipe context usually.
+      if (lastRecipeDate) setLastRecipeDate(null);
       return;
     }
 
@@ -525,20 +531,24 @@ export const FormularioVenta: React.FC = () => {
     setLoading(true);
     try {
       const { data } = await LOAApi.get(`/api/clients/by-dni/${clienteDNI}`);
-      const clienteData = data.result.rows?.[0] || data.result[0] || data.result;
+      const clienteData = data.result.rows?.[0] || data.result?.[0] || data.result;
 
-      if (clienteData) {
+      if (data.result.rows.length !== 0) {
         setCliente(clienteData);
-        setFieldValue('clienteName', clienteData.nombre);
-        setFieldValue('clienteApellido', clienteData.apellido);
+        setFieldValue('clienteName', clienteData.nombre ?? '');
+        setFieldValue('clienteApellido', clienteData.apellido ?? '');
         setFieldValue('clienteTelefono', clienteData.telefono ?? '');
         setFieldValue('clienteDomicilio', clienteData.direccion ?? '');
       } else {
         Swal.fire('Atención', 'Cliente no encontrado', 'info');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error al buscar cliente', error);
-      Swal.fire('Error', 'Error al buscar cliente', 'error');
+      if (error.response && error.response.status === 404) {
+        Swal.fire('Atención', 'Cliente no encontrado en la base de datos', 'warning');
+      } else {
+        Swal.fire('Error', 'Error al buscar cliente', 'error');
+      }
     } finally {
       setLoading(false);
     }
@@ -630,6 +640,11 @@ export const FormularioVenta: React.FC = () => {
       safeSet('doctorMatricula', last.matricula);
 
       handleSearchDoctor();
+
+      // Set Date
+      if (last.created_at) {
+        setLastRecipeDate(last.created_at);
+      }
 
       setFieldValue('armazon', '');
 
@@ -898,6 +913,18 @@ export const FormularioVenta: React.FC = () => {
     processSale(true);
   };
 
+
+  // Wrapper for onInputChange to clear lastRecipeDate
+  const handleInputChangeWrapped = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    if (lastRecipeDate) setLastRecipeDate(null);
+    onInputChange(e);
+  };
+
+  const handleResetWrapped = () => {
+    setLastRecipeDate(null);
+    onResetForm();
+  };
+
   return (
     <div className="w-full max-w-5xl mx-auto p-4 sm:p-6 fade-in">
       <div className="flex items-center justify-between gap-3 mb-4">
@@ -909,7 +936,7 @@ export const FormularioVenta: React.FC = () => {
         {/* SECTION: CLIENT (Common) */}
         <ClientForm
           formState={formState as FormValues}
-          onInputChange={onInputChange}
+          onInputChange={handleInputChangeWrapped}
           handleSearchClick={handleSearchClick}
           loading={loading}
           formErrors={formErrors}
@@ -923,7 +950,10 @@ export const FormularioVenta: React.FC = () => {
             <select
               className="w-full input mb-3 border border-slate-600 rounded-lg px-3 py-2 text-white outline-none focus:ring-2 focus:ring-cyan-500"
               value={selectedObraSocialId}
-              onChange={(e) => setSelectedObraSocialId(e.target.value)}
+              onChange={(e) => {
+                setSelectedObraSocialId(e.target.value);
+                setLastRecipeDate(null);
+              }}
             >
               <option value="">-- Ninguna / Particular --</option>
               {obrasSociales.map(os => (
@@ -941,18 +971,24 @@ export const FormularioVenta: React.FC = () => {
         </div>
 
         {/* SECTION: TABS */}
-        <div className="flex border-b border-gray-700 mb-4">
+        <div className="flex border-b border-blanco mb-4">
           <button
             type="button"
             className={`py-2 px-4 font-medium text-xl transition-colors ${activeTab === 'optica' ? 'border-b-2 border-celeste text-celeste' : 'text-white hover:text-crema/90'}`}
-            onClick={() => setActiveTab('optica')}
+            onClick={() => {
+              setActiveTab('optica');
+              setLastRecipeDate(null);
+            }}
           >
             A. Venta Óptica (Receta)
           </button>
           <button
             type="button"
             className={`py-2 px-4 font-medium text-xl transition-colors ${activeTab === 'retail' ? 'border-b-2 border-celeste text-celeste' : 'text-white hover:text-crema/90'}`}
-            onClick={() => setActiveTab('retail')}
+            onClick={() => {
+              setActiveTab('retail');
+              setLastRecipeDate(null);
+            }}
           >
             B. Venta Directa (Productos)
           </button>
@@ -960,9 +996,25 @@ export const FormularioVenta: React.FC = () => {
 
         {/* SECTION: TAB CONTENT */}
         <div className={activeTab === 'optica' ? 'block' : 'hidden'}>
+          <div className="flex justify-end mb-4 items-center gap-2">
+            {lastRecipeDate && (
+              <span className="text-crema text-md">
+                Receta del {new Date(lastRecipeDate).toLocaleDateString()}
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={handleRepeatPrescription}
+              className="btn-secondary"
+              disabled={!cliente || loading}
+            >
+              {loading ? "Cargando..." : "↻ Repetir Última Receta"}
+            </button>
+          </div>
+
           <DoctorForm
             formState={formState as FormValues}
-            onInputChange={onInputChange}
+            onInputChange={handleInputChangeWrapped}
             setFieldValue={setFieldValue}
             handleSearchDoctor={handleSearchDoctor}
             loading={loading}
@@ -979,7 +1031,7 @@ export const FormularioVenta: React.FC = () => {
             prefix="lejos"
             formState={formState as FormValues}
             formErrors={formErrors}
-            onInputChange={onInputChange}
+            onInputChange={handleInputChangeWrapped}
             stockStatus={stockStatus.lejos}
             materials={materials}
             treatments={treatments}
@@ -990,7 +1042,7 @@ export const FormularioVenta: React.FC = () => {
             prefix="cerca"
             formState={formState as FormValues}
             formErrors={formErrors}
-            onInputChange={onInputChange}
+            onInputChange={handleInputChangeWrapped}
             stockStatus={stockStatus.cerca}
             materials={materials}
             treatments={treatments}
@@ -998,7 +1050,7 @@ export const FormularioVenta: React.FC = () => {
 
           <FrameSection
             formState={formState as FormValues}
-            onInputChange={onInputChange}
+            onInputChange={handleInputChangeWrapped}
             onPriceChange={(precio: number, id: string | null) => {
               // setArmazonPrecio(precio); // REMOVED: Using centralized state
               // setSelectedArmazonId(id || null); // REMOVED: Using centralized state
@@ -1006,25 +1058,17 @@ export const FormularioVenta: React.FC = () => {
                 ...prev,
                 armazon: { id: id, price: precio }
               }));
+              if (lastRecipeDate) setLastRecipeDate(null);
             }}
             dolarRate={dolarRate}
           />
 
           <MultifocalForm
             formState={formState as FormValues}
-            onInputChange={onInputChange}
+            onInputChange={handleInputChangeWrapped}
           />
 
-          <div className="flex justify-end mt-2">
-            <button
-              type="button"
-              onClick={handleRepeatPrescription}
-              className="btn-secondary"
-              disabled={!cliente || loading}
-            >
-              {loading ? "Cargando..." : "↻ Repetir Última Receta"}
-            </button>
-          </div>
+
 
           <div className="p-4 rounded-xl border border-blanco mt-4 flex items-center justify-between ">
             <label className="text-white font-bold">Total Cristales (Auto-calculado) ($):</label>
@@ -1167,7 +1211,7 @@ export const FormularioVenta: React.FC = () => {
 
           <button
             type="button"
-            onClick={onResetForm}
+            onClick={handleResetWrapped}
             className="btn-secondary ml-auto"
             disabled={loading}
           >

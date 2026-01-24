@@ -171,7 +171,8 @@ export const FormularioDeEntregaTicket: React.FC = () => {
         },
         onSuccess: () => {
             Swal.fire("Entregado", "El pedido ha sido marcado como entregado.", "success");
-            queryClient.invalidateQueries({ queryKey: ['tickets', 'LISTO'] });
+            // Correct key used in useQuery above: ['tickets', 'delivery-panel']
+            queryClient.invalidateQueries({ queryKey: ['tickets', 'delivery-panel'] });
             setSelectedTicketId(null);
             setClientDebt(0);
         },

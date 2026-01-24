@@ -65,8 +65,6 @@ export const AppRouter = () => {
                 <Route path="devoluciones" element={<DevolucionesPage />} />
                 <Route path="entregas" element={<FormularioDeEntregaTicket />} />
 
-                {/* NUEVA RUTA EMPLEADO */}
-                <Route path="cierre-caja" element={<CierreCajaPage />} />
               </Route>
             </Route>
 

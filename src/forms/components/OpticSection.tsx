@@ -155,7 +155,7 @@ export const OpticSection: React.FC<OpticSectionProps> = ({
                 </div>
 
                 <div>
-                    <label className="block text-sm text-white font-medium mb-1">Color / Tratamiento</label>
+                    <label className="block text-sm text-white font-medium mb-1">Tratamiento</label>
                     <select
                         name={`${prefix}_Color`}
                         value={getVal('Color') || ''}

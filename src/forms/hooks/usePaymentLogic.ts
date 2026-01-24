@@ -72,7 +72,15 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
     const { ventaId: paramVentaId } = useParams<{ ventaId: string }>();
     const navigate = useNavigate();
     const location = useLocation();
-    const { uid } = useAppSelector(state => state.auth);
+    const { uid, role } = useAppSelector(state => state.auth);
+
+    const getHomePath = () => {
+        if (role === 'ADMIN' || role === 'SUPERADMIN') return '/admin';
+        if (role === 'EMPLEADO') return '/empleado';
+        if (role === 'TALLER') return '/taller';
+        return '/';
+    };
+
     const stateVentaId = location.state?.ventaId;
     const stateTotal = location.state?.total;
     const isDirectSaleState = location.state?.isDirectSale || false;
@@ -313,7 +321,7 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
         try {
             await LOAApi.put(`/api/sales/${ventaId}/cancel`);
             Swal.fire("Cancelada", "Venta cancelada", "success");
-            navigate('/');
+            navigate(getHomePath());
         } catch (error) {
             console.error(error);
             Swal.fire("Error", "Error cancelando venta", "error");
@@ -542,17 +550,17 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
 
         // Si NO es venta directa, aplicar regla del 30%
         if (!isDirectSale && !isFullyPaid && !isMinimoCubierto) {
-            // Si hay nuevos pagos pendientes de guardar, advertir que primero se validará
+            // WARN but allow continue
             Swal.fire({
                 title: 'Seña Insuficiente',
-                html: `El pago mínimo requerido es <b>$${Math.round(montoMinimo)}</b> (30%).<br>Pagado: $${totalPagadoReal}.<br><br>¿Solicitar autorización de Supervisor?`,
+                html: `El pago mínimo sugerido es <b>$${Math.round(montoMinimo)}</b> (30%).<br>Pagado: $${totalPagadoReal}.<br><br>¿Desea continuar de todos modos?`,
                 icon: 'warning',
                 showCancelButton: true,
-                confirmButtonText: 'Solicitar Autorización',
+                confirmButtonText: 'Sí, continuar',
                 cancelButtonText: 'Cancelar'
             }).then((result) => {
                 if (result.isConfirmed) {
-                    setSupervisorModalOpen(true);
+                    processSale(newPayments);
                 }
             });
             return;
@@ -587,7 +595,7 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
             // Intentar abrir PDF si corresponde
             if (!isDirectSale && ventaId) openLabOrderPdf(ventaId);
 
-            return navigate(`/nueva-venta`);
+            return navigate(getHomePath());
         }
 
         // Si hay pagos nuevos, los guardamos (aun si es con deuda, si pasó la validación del 30% o fue autorizado externamente - wait, 
@@ -601,7 +609,7 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
 
     const processSale = async (newPayments: any[]) => {
         if (newPayments.length === 0 && restante <= 0.01) {
-            navigate(`/nueva-venta`);
+            navigate(getHomePath());
             return;
         }
 
@@ -624,14 +632,23 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
             }
 
             // CREAR TICKET AUTOMÁTICAMENTE
-            if (!isDirectSale && ventaId && clientId && uid) {
-                await LOAApi.post('/api/tickets', {
-                    venta_id: ventaId,
-                    cliente_id: clientId,
-                    usuario_id: uid,
-                    fecha_entrega_estimada: new Date(Date.now() + 10000).toISOString(),
-                    notas: 'Ticket generado automáticamente al pagar'
-                });
+            // Ensure we have clientId. If not set in state, fallback to fetching it? 
+            // Usually fetchSaleDetails sets it.
+            if (!isDirectSale && ventaId) {
+                // Determine client ID falling back if state is empty (though fetchSaleDetails should have set it)
+                const targetClientId = clientId;
+
+                if (targetClientId && uid) {
+                    await LOAApi.post('/api/tickets', {
+                        venta_id: ventaId,
+                        cliente_id: targetClientId,
+                        usuario_id: uid,
+                        fecha_entrega_estimada: new Date(Date.now() + 10000).toISOString(),
+                        notas: 'Ticket generado automáticamente al pagar'
+                    });
+                } else {
+                    console.warn("Skipping ticket creation: missing clientId or uid", { clientId: targetClientId, uid });
+                }
             }
 
             // ABRIR PDF AUTOMATICAMENTE
@@ -641,7 +658,8 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
             setPagos([]);
 
             // Navigate or stay? Usually navigate to ticket
-            navigate(`/ventas/${ventaId}`);
+            navigate(getHomePath());
+
 
         } catch (error) {
             console.error(error);
@@ -834,7 +852,6 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
         qrData,
         pointStatus,
         setAsyncPaymentStatus,
-        // OS
         obrasSociales,
         selectedObraSocialId,
         setSelectedObraSocialId,

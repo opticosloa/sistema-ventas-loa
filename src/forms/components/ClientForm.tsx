@@ -1,9 +1,10 @@
 import React from 'react';
 import Swal from 'sweetalert2';
-import type { FormValues } from '../../types/ventasFormTypes';
-import { BotonEscanearDNI } from '../../components/ui/BotonEscanearDNI';
-import type { Cliente } from '../../types/Cliente';
 import LOAApi from '../../api/LOAApi';
+import { BotonEscanearDNI } from '../../components/ui/BotonEscanearDNI';
+import { formatDateForInput } from '../../helpers';
+import type { FormValues } from '../../types/ventasFormTypes';
+import type { Cliente } from '../../types/Cliente';
 
 
 interface ClientFormProps {
@@ -209,9 +210,10 @@ export const ClientForm: React.FC<ClientFormProps> = ({
                     <input
                         type="datetime-local"
                         name="clienteFechaRecibido"
-                        value={clienteFechaRecibido}
+                        value={formatDateForInput(clienteFechaRecibido)}
                         onChange={onInputChange}
                         className="input"
+                        disabled
                     />
                 </label>
 
