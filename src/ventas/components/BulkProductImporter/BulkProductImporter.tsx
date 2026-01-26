@@ -8,7 +8,13 @@ import { bulkUpsertProducts } from '../../../services/products.api';
 import { IMPORT_PRESETS, PRODUCT_CATEGORIES } from './types';
 import type { BulkImportConfig, ParsedProduct } from './types';
 
-export const BulkProductImporter: React.FC = () => {
+import { X } from 'lucide-react';
+
+interface BulkProductImporterProps {
+    onClose?: () => void;
+}
+
+export const BulkProductImporter: React.FC<BulkProductImporterProps> = ({ onClose }) => {
     const [step, setStep] = useState<number>(1);
     const [config, setConfig] = useState<BulkImportConfig>({
         presetId: IMPORT_PRESETS[0].id,
@@ -166,7 +172,7 @@ export const BulkProductImporter: React.FC = () => {
     // --- RENDER STEPS ---
 
     const renderStep1 = () => (
-        <div className="bg-white p-6 rounded-lg shadow-md max-w-2xl mx-auto">
+        <div className="bg-white p-6 rounded-lg shadow-md max-w-2xl mx-auto border border-gray-600">
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
                 <FileSpreadsheet className="w-6 h-6 text-blue-600" />
                 Paso 1: Configuración de Carga
@@ -177,7 +183,7 @@ export const BulkProductImporter: React.FC = () => {
                 <div>
                     <label className="block text-sm font-medium text-gray-700">Preset de Importación</label>
                     <select
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2"
+                        className="mt-1 block w-full rounded-md border-gray-800 bg-crema shadow-sm border p-2"
                         value={config.presetId}
                         onChange={(e) => setConfig({ ...config, presetId: e.target.value })}
                     >
@@ -192,7 +198,7 @@ export const BulkProductImporter: React.FC = () => {
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Marca *</label>
                         <select
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2"
+                            className="mt-1 block w-full rounded-md border-gray-800 bg-crema shadow-sm border p-2"
                             value={config.marcaId}
                             onChange={(e) => setConfig({ ...config, marcaId: e.target.value })}
                         >
@@ -206,7 +212,7 @@ export const BulkProductImporter: React.FC = () => {
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Categoría *</label>
                         <select
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2"
+                            className="mt-1 block w-full rounded-md border-gray-800 bg-crema shadow-sm border p-2"
                             value={config.categoryId}
                             onChange={(e) => setConfig({ ...config, categoryId: e.target.value })}
                         >
@@ -220,7 +226,7 @@ export const BulkProductImporter: React.FC = () => {
                         <label className="block text-sm font-medium text-gray-700">Stock Inicial</label>
                         <input
                             type="number"
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm border p-2"
+                            className="mt-1 block w-full rounded-md border-gray-800 bg-crema shadow-sm border p-2"
                             value={config.stock}
                             onChange={(e) => setConfig({ ...config, stock: Number(e.target.value) })}
                         />
@@ -228,7 +234,7 @@ export const BulkProductImporter: React.FC = () => {
                 </div>
 
                 {/* File Upload */}
-                <div className="mt-6 border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:bg-gray-50 transition-colors">
+                <div className="mt-6 border-2 border-dashed border-gray-800 bg-crema rounded-lg p-6 text-center hover:bg-gray-50 transition-colors">
                     <input
                         type="file"
                         accept=".xlsx, .xls, .csv"
@@ -366,8 +372,15 @@ export const BulkProductImporter: React.FC = () => {
     );
 
     return (
-        <div className="min-h-screen bg-gray-100 p-8">
-            <h1 className="text-2xl font-bold mb-6 text-gray-800">Importación Masiva de Productos</h1>
+        <div className="bg-white rounded-lg p-6 max-h-[85vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+                <h1 className="text-2xl font-bold text-gray-800">Importación Masiva</h1>
+                {onClose && (
+                    <button onClick={onClose} className="text-gray-500 hover:text-red-500 transition-colors">
+                        <X size={24} />
+                    </button>
+                )}
+            </div>
             {step === 1 ? renderStep1() : renderStep2()}
         </div>
     );

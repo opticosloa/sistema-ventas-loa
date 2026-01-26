@@ -57,22 +57,33 @@ export const OpticSection: React.FC<OpticSectionProps> = ({
                         )}
                     </div>
                     <div className="grid grid-cols-3 gap-3">
-                        {['Esf', 'Cil', 'Eje'].map((label) => (
-                            <div key={label}>
-                                <label className="text-xs text-white/70 mb-1 block">
-                                    {label} {label === 'Esf' && <span className="text-red-500">*</span>}
-                                </label>
-                                <input
-                                    type="text"
-                                    inputMode="decimal"
-                                    pattern="[0-9.,\-]*"
-                                    name={`${prefix}_OD_${label}`}
-                                    value={getVal(`OD_${label}`) || ''}
-                                    onChange={handleNumericChange}
-                                    className={getInputClass(`OD_${label}`)}
-                                />
-                            </div>
-                        ))}
+                        {['Esf', 'Cil', 'Eje'].map((label) => {
+                            // Logic for Axis (Eje)
+                            let isDisabled = false;
+                            if (label === 'Eje') {
+                                const cilValue = getVal('OD_Cil');
+                                isDisabled = !cilValue || parseFloat(cilValue) === 0;
+                            }
+
+                            return (
+                                <div key={label}>
+                                    <label className="text-xs text-white/70 mb-1 block">
+                                        {label} {label === 'Esf' && <span className="text-red-500">*</span>}
+                                    </label>
+                                    <input
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,\-]*"
+                                        name={`${prefix}_OD_${label}`}
+                                        value={getVal(`OD_${label}`) || ''}
+                                        onChange={onInputChange}
+                                        disabled={isDisabled}
+                                        className={`${getInputClass(`OD_${label}`)} ${isDisabled ? 'opacity-50 cursor-not-allowed bg-gray-300 text-gray-500' : ''}`}
+                                        tabIndex={isDisabled ? -1 : undefined}
+                                    />
+                                </div>
+                            );
+                        })}
                     </div>
                     {prefix === 'lejos' && (
                         <div className="mt-3">
@@ -101,20 +112,31 @@ export const OpticSection: React.FC<OpticSectionProps> = ({
                         )}
                     </div>
                     <div className="grid grid-cols-3 gap-3">
-                        {['Esf', 'Cil', 'Eje'].map((label) => (
-                            <div key={label}>
-                                <label className="text-xs text-white/70 mb-1 block">{label}</label>
-                                <input
-                                    type="text"
-                                    inputMode="decimal"
-                                    pattern="[0-9.,\-]*"
-                                    name={`${prefix}_OI_${label}`}
-                                    value={getVal(`OI_${label}`) || ''}
-                                    onChange={handleNumericChange}
-                                    className={getInputClass(`OI_${label}`, true)}
-                                />
-                            </div>
-                        ))}
+                        {['Esf', 'Cil', 'Eje'].map((label) => {
+                            // Logic for Axis (Eje)
+                            let isDisabled = false;
+                            if (label === 'Eje') {
+                                const cilValue = getVal('OI_Cil');
+                                isDisabled = !cilValue || parseFloat(cilValue) === 0;
+                            }
+
+                            return (
+                                <div key={label}>
+                                    <label className="text-xs text-white/70 mb-1 block">{label}</label>
+                                    <input
+                                        type="text"
+                                        inputMode="decimal"
+                                        pattern="[0-9.,\-]*"
+                                        name={`${prefix}_OI_${label}`}
+                                        value={getVal(`OI_${label}`) || ''}
+                                        onChange={onInputChange}
+                                        disabled={isDisabled}
+                                        className={`${getInputClass(`OI_${label}`, true)} ${isDisabled ? 'opacity-50 cursor-not-allowed bg-gray-300 text-gray-500' : ''}`}
+                                        tabIndex={isDisabled ? -1 : undefined}
+                                    />
+                                </div>
+                            );
+                        })}
                     </div>
                     {prefix === 'lejos' && (
                         <div className="mt-3">

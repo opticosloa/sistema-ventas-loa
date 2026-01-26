@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useAuthStore } from '../hooks';
 import Swal from 'sweetalert2';
 import { Search, X, Plus } from 'lucide-react';
 import { useForm, type SubmitHandler } from 'react-hook-form';
@@ -7,6 +8,7 @@ import * as z from 'zod';
 import LOAApi from '../api/LOAApi';
 import type { Brand } from '../types/Marcas';
 import { BrandCreateModal } from './components/modals/BrandCreateModal';
+import { BulkProductImporter } from '../ventas/components/BulkProductImporter/BulkProductImporter';
 
 // --- Zod Schema ---
 const productSchema = z.object({
@@ -58,6 +60,7 @@ const initialValues: ProductFormData = {
 };
 
 export const FormularioProducto: React.FC = () => {
+    const { role } = useAuthStore();
     // React Hook Form
     const {
         register,
@@ -80,6 +83,7 @@ export const FormularioProducto: React.FC = () => {
     const [showBrandResults, setShowBrandResults] = useState(false);
     const [isSearchingBrand, setIsSearchingBrand] = useState(false);
     const [isBrandModalOpen, setIsBrandModalOpen] = useState(false);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
     // Refs
     const searchTimeout = useRef<any>(null);
@@ -237,9 +241,19 @@ export const FormularioProducto: React.FC = () => {
     return (
         <div className="w-full max-w-5xl mx-auto p-4 fade-in">
             <section className="bg-opacity-10 border border-blanco rounded-xl p-4">
-                <h2 className="text-blanco text-2xl font-semibold mb-4">
-                    Alta de Producto
-                </h2>
+                <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-blanco text-2xl font-semibold">
+                        Alta de Producto
+                    </h2>
+                    {role === 'SUPERADMIN' && (
+                        <button
+                            onClick={() => setIsImportModalOpen(true)}
+                            className="px-4 py-1.5 rounded-md text-sm font-medium bg-green-600 text-white hover:bg-green-700 shadow flex items-center gap-2"
+                        >
+                            <span>Importar (Excel)</span>
+                        </button>
+                    )}
+                </div>
 
                 <form
                     onSubmit={handleSubmit(onSubmit)}
@@ -470,6 +484,16 @@ export const FormularioProducto: React.FC = () => {
                     onSuccess={handleBrandCreateSuccess}
                     initialName={brandSearchTerm}
                 />
+
+                {/* Import Modal */}
+                {isImportModalOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                        <div className="w-full max-w-5xl relative animate-in fade-in zoom-in duration-300">
+                            {/* The content is handled by BulkProductImporter which now has local bg-white */}
+                            <BulkProductImporter onClose={() => setIsImportModalOpen(false)} />
+                        </div>
+                    </div>
+                )}
             </section>
         </div>
     );

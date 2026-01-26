@@ -240,6 +240,32 @@ export const FormularioVenta: React.FC = () => {
     }
   }, [lejos_OI_Esf, lejos_OI_Add, cerca_OI_Esf, lejos_OI_Cil, lejos_OI_Eje, setFieldValue]);
 
+  // LOGIC: Clear Axis if Cylinder is 0 or empty
+  useEffect(() => {
+    const checkAndClearAxis = (prefix: string, ojo: string) => {
+      // @ts-ignore
+      const cil = formState[`${prefix}_${ojo}_Cil`];
+      // @ts-ignore
+      const eje = formState[`${prefix}_${ojo}_Eje`];
+
+      if ((!cil || parseFloat(cil) === 0) && eje && eje !== "" && eje !== "0") {
+        setFieldValue(`${prefix}_${ojo}_Eje` as keyof FormValues, "");
+      }
+    };
+
+    checkAndClearAxis('lejos', 'OD');
+    checkAndClearAxis('lejos', 'OI');
+    checkAndClearAxis('cerca', 'OD');
+    checkAndClearAxis('cerca', 'OI');
+
+  }, [
+    formState.lejos_OD_Cil, formState.lejos_OI_Cil,
+    formState.cerca_OD_Cil, formState.cerca_OI_Cil,
+    setFieldValue // Dependency, though stable
+    // We intentionally don't add Eje to dependencies to avoid loops, 
+    // we only react when Cil changes (or if we really want to enforce it, we add Eje too but inside condition)
+  ]);
+
   // --- EFFECTS ---
   // Initial data loading handled by useVentaData custom hook.
 
@@ -315,9 +341,6 @@ export const FormularioVenta: React.FC = () => {
         setDiscount(0);
         setCalculatedCoverage(0);
       }
-      // Reset Last Recipe Date if OS changes? User said "any data of the recipe". 
-      // OS is part of recipe context usually.
-      if (lastRecipeDate) setLastRecipeDate(null);
       return;
     }
 
@@ -696,10 +719,11 @@ export const FormularioVenta: React.FC = () => {
     const newErrors: Record<string, string> = {};
 
     // 1. Validate Client
-    if (!cliente?.cliente_id && (!clienteName || !clienteApellido || !clienteDNI)) {
+    if (!cliente?.cliente_id && (!clienteName || !clienteApellido || !clienteDNI || !clienteTelefono)) {
       if (!clienteName) newErrors.clienteName = 'Requerido';
       if (!clienteApellido) newErrors.clienteApellido = 'Requerido';
       if (!clienteDNI) newErrors.clienteDNI = 'Requerido';
+      if (!clienteTelefono) newErrors.clienteTelefono = 'Requerido';
     }
 
     // 2. Validate Optic Data if Prescribing
@@ -791,7 +815,19 @@ export const FormularioVenta: React.FC = () => {
         };
         const createClientRes = await LOAApi.post('/api/clients', newClientPayload);
         if (createClientRes.data.success) {
-          finalClienteId = createClientRes.data.result.rows[0].cliente_id;
+          const resResult = createClientRes.data.result;
+          // Handle variations: { rows: [...] } or direct object
+          if (resResult?.rows?.[0]?.cliente_id) {
+            finalClienteId = resResult.rows[0].cliente_id;
+          } else if (resResult?.cliente_id) {
+            finalClienteId = resResult.cliente_id;
+          } else if (resResult?.id) {
+            finalClienteId = resResult.id;
+          }
+        }
+
+        if (!finalClienteId) {
+          throw new Error("No se pudo obtener el ID del cliente creado. Verifique la respuesta del servidor.");
         }
       } catch (e) {
         console.error(e);

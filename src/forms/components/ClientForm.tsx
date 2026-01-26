@@ -279,14 +279,14 @@ export const ClientForm: React.FC<ClientFormProps> = ({
                 </label>
 
                 <label className="flex flex-col gap-1">
-                    <span className="text-sm text-blanco">Teléfono</span>
+                    <span className="text-sm text-blanco">Teléfono <span className="text-red-500">*</span></span>
                     <input
                         type="tel"
                         name="clienteTelefono"
                         value={clienteTelefono}
                         onChange={onInputChange}
                         placeholder="Ej: 11 1234 5678"
-                        className="input"
+                        className={getInputClass('clienteTelefono')}
                     />
                 </label>
 
