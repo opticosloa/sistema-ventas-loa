@@ -7,3 +7,4 @@ export * from './usePagoResultado';
 export * from './usePayment';
 export * from './useSaleStatus';
 export * from './useUIStore';
+export * from './usePrintTicket';

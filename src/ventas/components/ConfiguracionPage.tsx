@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import Swal from 'sweetalert2';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { RefreshCw, Save, DollarSign, Calendar, Stethoscope } from 'lucide-react';
+import { RefreshCw, Save, Calendar, Stethoscope } from 'lucide-react';
 import LOAApi from '../../api/LOAApi';
 import { useNumericInput } from '../../hooks/useNumericInput';
 import { CrystalSettingsSection } from './CrystalSettingsSection';
+import { LocalPrintConfig } from './LocalPrintConfig';
 
 export const ConfiguracionPage: React.FC = () => {
     const queryClient = useQueryClient();
@@ -62,7 +63,7 @@ export const ConfiguracionPage: React.FC = () => {
             <div className="max-w-4xl mx-auto">
                 <header className="mb-8">
                     <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-                        <DollarSign /> Configuración de Divisas
+                        Configuración de General
                     </h1>
                     <p className="text-slate-400 mt-2">Gestiona la cotización del dólar para conversiones automáticas.</p>
                 </header>
@@ -141,6 +142,7 @@ export const ConfiguracionPage: React.FC = () => {
                     </div>
                 </div>
 
+                <LocalPrintConfig />
                 <CrystalSettingsSection />
             </div>
         </div>

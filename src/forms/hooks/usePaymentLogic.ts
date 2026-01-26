@@ -274,11 +274,6 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
         }
     };
 
-    const openLabOrderPdf = (id: string | number) => {
-        if (!id) return;
-        const url = `${LOAApi.defaults.baseURL}/api/sales/${id}/laboratory-order`;
-        window.open(url, '_blank');
-    };
 
     const handleSearchDni = async () => {
         if (!dniSearch) return Swal.fire("Info", "Ingrese DNI", "info");
@@ -592,10 +587,9 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
                 }
             }
 
-            // Intentar abrir PDF si corresponde
-            if (!isDirectSale && ventaId) openLabOrderPdf(ventaId);
-
-            return navigate(getHomePath());
+            // Intentar abrir PDF si corresponde -> MOVIDO A PAGO RESULTADO
+            // if (!isDirectSale && ventaId) openLabOrderPdf(ventaId);
+            return navigate(`/pago-resultado?venta_id=${ventaId}&isDirectSale=${isDirectSale}`);
         }
 
         // Si hay pagos nuevos, los guardamos (aun si es con deuda, si pasó la validación del 30% o fue autorizado externamente - wait, 
@@ -651,14 +645,13 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
                 }
             }
 
-            // ABRIR PDF AUTOMATICAMENTE
-            if (!isDirectSale && ventaId) openLabOrderPdf(ventaId);
-
+            // ABRIR PDF AUTOMATICAMENTE -> MOVIDO A PAGO RESULTADO CON AGENTE
+            // if (!isDirectSale && ventaId) openLabOrderPdf(ventaId);
             fetchExistingPayments(ventaId!.toString());
             setPagos([]);
 
             // Navigate or stay? Usually navigate to ticket
-            navigate(getHomePath());
+            navigate(`/pago-resultado?venta_id=${ventaId}&isDirectSale=${isDirectSale}`);
 
 
         } catch (error) {

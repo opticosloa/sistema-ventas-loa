@@ -1,31 +1,61 @@
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { useRef } from 'react';
-import { usePagoResultado } from '../../hooks';
+import { useRef, useEffect } from 'react';
+import { usePagoResultado, usePrintTicket } from '../../hooks';
 import { useReactToPrint } from 'react-to-print';
 import { TicketVenta } from '../../components/print/TicketVenta';
+import LOAApi from '../../api/LOAApi';
 
 export const PagoResultadoPage = () => {
     const [params] = useSearchParams();
     const navigate = useNavigate();
     const ventaId = params.get('venta_id');
+    const isDirectSale = params.get('isDirectSale') === 'true';
 
     const { estado, loading } = usePagoResultado(ventaId);
+    const { printTicket, isPrinting } = usePrintTicket();
 
-    // Ticket Printing
+    // Ticket Printing (Legacy HTML)
     const componentRef = useRef<HTMLDivElement>(null);
-    const handlePrint = useReactToPrint({
+    const handleLegacyPrint = useReactToPrint({
         contentRef: componentRef,
         documentTitle: `Ticket_${ventaId}`,
     });
 
+    // Auto-Print Logic via Agent
+    const printedRef = useRef(false);
+    useEffect(() => {
+        if (!loading && (estado === 'PAGADA' || estado === 'PENDIENTE') && !printedRef.current && ventaId) {
+            // Only auto-print for Optic Sales (as per previous logic)
+            if (!isDirectSale) {
+                printedRef.current = true;
+                const pdfUrl = `${LOAApi.defaults.baseURL}/api/sales/${ventaId}/laboratory-order`;
+                printTicket(pdfUrl);
+            }
+        }
+    }, [loading, estado, ventaId, isDirectSale, printTicket]);
+
+    // Manual Print Handler
+    const handlePrintClick = () => {
+        if (!ventaId) return;
+
+        // If it's a direct sale, we might not have a PDF, so use legacy print?
+        // Or if we want to enforce Agent for everything:
+        if (isDirectSale) {
+            handleLegacyPrint();
+        } else {
+            const pdfUrl = `${LOAApi.defaults.baseURL}/api/sales/${ventaId}/laboratory-order`;
+            printTicket(pdfUrl);
+        }
+    };
+
     if (loading) {
-        return <p className="text-center mt-10">Verificando pago…</p>;
+        return <p className="text-center mt-10 text-white">Verificando pago…</p>;
     }
 
     if (estado === 'RECHAZADA') {
         return (
-            <div className="flex flex-col items-center mt-10 text-red-600 gap-4">
-                <h2 className="text-xl">Pago rechazado</h2>
+            <div className="flex flex-col items-center mt-10 text-red-400 gap-4 fade-in">
+                <h2 className="text-xl font-bold">Pago rechazado</h2>
                 <p>Intentá nuevamente o usá otro medio de pago.</p>
                 <button
                     onClick={() => navigate('/empleado/nueva-venta/pago', { state: { ventaId } })}
@@ -37,56 +67,32 @@ export const PagoResultadoPage = () => {
         );
     }
 
-    if (estado === 'PENDIENTE') {
-        return (
-            <div className="flex flex-col items-center mt-10 gap-4 text-orange-500">
-                <h2 className="text-xl font-bold">Pago Pendiente / A Cuenta</h2>
-                <p>La venta se registró correctamente. El pago total no está confirmado.</p>
-                <div className="flex gap-4 mt-4">
-                    <button
-                        onClick={handlePrint}
-                        className="flex items-center gap-2 px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition shadow-lg border border-gray-600"
-                    >
-                        🖨️ Imprimir Ticket
-                    </button>
-                    <button
-                        onClick={() => navigate('/ventas')}
-                        className="px-6 py-3 bg-celeste text-white rounded-lg hover:bg-celeste/80 transition shadow-lg"
-                    >
-                        Volver al Inicio
-                    </button>
-                </div>
-                {/* Hidden Ticket Component for Printing */}
-                <div style={{ display: 'none' }}>
-                    <TicketVenta ref={componentRef} saleId={ventaId || ''} />
-                </div>
-            </div>
-        );
-    }
+    const title = estado === 'PENDIENTE' ? 'Pago Pendiente / A Cuenta' : 'Pago Aprobado';
+    const colorClass = estado === 'PENDIENTE' ? 'text-orange-500' : 'text-green-500';
 
-    // PAGADA or Default
     return (
-        <div className="text-center mt-10 text-green-600 flex flex-col items-center gap-4">
-            <h2 className="text-xl font-bold">Pago Aprobado</h2>
-            <p>La venta se registró correctamente.</p>
+        <div className={`flex flex-col items-center mt-10 gap-4 ${colorClass} fade-in`}>
+            <h2 className="text-xl font-bold">{title}</h2>
+            <p className="text-gray-300">La venta se registró correctamente.</p>
 
             <div className="flex gap-4 mt-4">
                 <button
-                    onClick={handlePrint}
+                    onClick={handlePrintClick}
+                    disabled={isPrinting}
                     className="flex items-center gap-2 px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition shadow-lg border border-gray-600"
                 >
-                    🖨️ Imprimir Ticket
+                    {isPrinting ? 'Enviando...' : '🖨️ Imprimir Ticket'}
                 </button>
 
                 <button
                     onClick={() => navigate('/ventas')}
-                    className="px-6 py-3 bg-celeste text-white rounded-lg hover:bg-celeste/80 transition shadow-lg"
+                    className="px-6 py-3 bg-celeste text-white rounded-lg hover:bg-celeste/80 transition shadow-lg font-bold"
                 >
                     Volver al Inicio
                 </button>
             </div>
 
-            {/* Hidden Ticket Component for Printing */}
+            {/* Hidden Ticket Component for Printing (Direct Sales / Fallback) */}
             <div style={{ display: 'none' }}>
                 <TicketVenta ref={componentRef} saleId={ventaId || ''} />
             </div>
