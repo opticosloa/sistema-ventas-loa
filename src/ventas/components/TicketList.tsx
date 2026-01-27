@@ -79,7 +79,7 @@ export const TicketList: React.FC = () => {
 
   return (
     <div className="container mx-auto p-2">
-      <h1 className="text-2xl font-bold mb-4 text-center">Lista de Tickets</h1>
+      <h1 className="text-2xl text-blanco font-bold mb-4 text-center">Lista de Tickets</h1>
 
       {/* ===== Mobile / sm: tarjetas apiladas ===== */}
       <div className="grid gap-4 w-fit md:hidden">

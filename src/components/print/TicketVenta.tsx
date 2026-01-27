@@ -80,7 +80,7 @@ export const TicketVenta = forwardRef<HTMLDivElement, TicketVentaProps>(({ saleI
 
             {/* HEADER */}
             <div className="text-center mb-3">
-                <h1 className="font-bold text-sm">ÓPTICA VISIÓN CLARA</h1>
+                <h1 className="font-bold text-sm">LABORATORIO ÓPTICO ACUÑA</h1>
                 <p>Av. San Martín 1234, Luján</p>
                 <p>CUIT: 30-12345678-9</p>
             </div>

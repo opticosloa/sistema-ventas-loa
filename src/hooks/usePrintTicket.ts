@@ -9,18 +9,28 @@ export const usePrintTicket = () => {
         const serverUrl = localStorage.getItem('localPrintServerUrl');
         const printerName = localStorage.getItem('localPrinterName');
 
-        // Logic: If NO configuration, Fallback immediately
+        // 1. SIEMPRE abrir el PDF (Solicitud usuario: "que siempre aparezca el pdf")
+        // Intentamos abrirlo inmediatamente para evitar bloqueos de pop-up si es evento de usuario.
+        // Si es useEffect, podría bloquearse, pero mantenemos la lógica anterior de intentar.
+        let pdfWindow: Window | null = null;
+        try {
+            pdfWindow = window.open(pdfUrl, '_blank');
+        } catch (e) {
+            console.error("Popup blocked?", e);
+        }
+
+        // Logic: If NO configuration, process ends here (PDF already opening)
         if (!serverUrl) {
-            console.log("No Local Print Agent configured. Falling back to window.open");
-            window.open(pdfUrl, '_blank');
+            console.log("No Local Print Agent configured.");
             setIsPrinting(false);
             return;
         }
 
         try {
-            // Attempt to send to Local Agent
-            // Ensure serverUrl doesn't have trailing slash if we append
+            // Attempt to send to Local Agent with Timeout
             const baseUrl = serverUrl.replace(/\/$/, "");
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 4000); // 4 Segundos
 
             const response = await fetch(`${baseUrl}/print`, {
                 method: 'POST',
@@ -29,39 +39,55 @@ export const usePrintTicket = () => {
                 },
                 body: JSON.stringify({
                     url: pdfUrl,
-                    printer: printerName // Optional, blank means default
-                })
+                    printer: printerName
+                }),
+                signal: controller.signal
             });
 
+            clearTimeout(timeoutId);
+
             if (!response.ok) {
-                // Determine if it was a connection error or server error
                 throw new Error(`Agent returned status ${response.status}`);
             }
 
             const data = await response.json();
             if (data.success) {
                 Swal.fire({
-                    title: 'Imprimiendo...',
-                    text: `Enviado a ${printerName || 'Impresora Predeterminada'}`,
+                    title: 'Enviado a Impresora',
+                    text: `Imprimiendo en ${printerName || 'Predeterminada'}...`,
                     icon: 'success',
                     timer: 2000,
-                    showConfirmButton: false
+                    showConfirmButton: false,
+                    position: 'top-end',
+                    toast: true
                 });
             } else {
-                throw new Error(data.error || 'Unknown error from agent');
+                throw new Error(data.error || 'Unknown error');
             }
 
-        } catch (error) {
+        } catch (error: any) {
             console.error("Local Print Agent failed:", error);
-            // Fallback
+
+            // Si falló o timeout
+            let msg = 'No se pudo contactar al agente de impresión.';
+            if (error.name === 'AbortError') {
+                msg = 'Tiempo de espera agotado (4s). Imprimiendo manual...';
+            }
+
             Swal.fire({
-                title: 'Agente de Impresión no disponible',
-                text: 'Abriendo PDF para impresión manual...',
+                title: 'Info Impresión',
+                text: msg + ' El PDF se abrió en otra pestaña.',
                 icon: 'info',
-                timer: 2000,
-                showConfirmButton: false
+                timer: 3000,
+                showConfirmButton: false,
+                position: 'top-end',
+                toast: true
             });
-            window.open(pdfUrl, '_blank');
+
+            // Re-intento de abrir si falló el primero (opcional, pero seguro)
+            if (!pdfWindow || pdfWindow.closed) {
+                window.open(pdfUrl, '_blank');
+            }
         } finally {
             setIsPrinting(false);
         }

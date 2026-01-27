@@ -83,6 +83,13 @@ export const Dashboard = () => {
               Devoluciones
             </button>
 
+            <button
+              className="bg-gray-100 border border-gray-300 shadow-sm rounded-lg h-28 flex items-center justify-center text-lg font-medium hover:bg-crema hover:opacity-90 transition"
+              onClick={() => navigate("/admin/entregas")}
+            >
+              Entregas
+            </button>
+
             {role === 'SUPERADMIN' && (
               <>
                 <button

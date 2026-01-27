@@ -145,11 +145,13 @@ export const ListaEmpleados: React.FC = () => {
   useEffect(() => {
     if (showModal || showForm) {
       document.body.style.overflow = "hidden";
+      document.documentElement.style.overflow = "hidden";
       const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") { setShowModal(false); setShowForm(false); } };
       window.addEventListener("keydown", onKey);
       return () => {
         window.removeEventListener("keydown", onKey);
         document.body.style.overflow = "";
+        document.documentElement.style.overflow = "";
       };
     }
   }, [showModal, showForm]);
@@ -332,10 +334,10 @@ export const ListaEmpleados: React.FC = () => {
 
       {/* Modal detalle empleado */}
       {showModal && selected && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="fixed inset-0 bg-black/40" onClick={closeModal} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={closeModal} />
           <div role="dialog" aria-modal="true" aria-label={`Detalle empleado ${selected.nombre} ${selected.apellido}`}
-            className="relative bg-white rounded-lg shadow-lg w-[95%] max-w-4xl p-6 z-50">
+            className="relative bg-white rounded-lg shadow-2xl w-full max-w-4xl p-6 z-50 max-h-[90vh] overflow-y-auto">
             <button aria-label="Cerrar" onClick={closeModal}
               className="absolute top-3 right-3 text-gray-500 hover:text-black">✕</button>
 
@@ -504,10 +506,10 @@ export const ListaEmpleados: React.FC = () => {
 
       {/* Modal agregar empleado */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="fixed inset-0 bg-black/40" onClick={closeForm} />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={closeForm} />
           <div role="dialog" aria-modal="true" aria-label="Agregar nuevo empleado"
-            className="relative bg-white rounded-lg shadow-lg w-[95%] max-w-4xl p-6 z-50">
+            className="relative bg-white rounded-lg shadow-2xl w-full max-w-4xl p-6 z-50 max-h-[90vh] overflow-y-auto">
             <button aria-label="Cerrar" onClick={closeForm}
               className="absolute top-3 right-3 text-gray-500 hover:text-black">✕</button>
 

@@ -310,7 +310,7 @@ export const FormularioVenta: React.FC = () => {
     const percentage = (discount / currentSubtotal) * 100;
 
     // 3. Check if within max_descuento limit (with tolerance for float precision)
-    if (percentage <= max_descuento + 0.01) {
+    if (percentage <= max_descuento) {
       setIsDiscountAuthorized(true);
     } else {
       // 4. If exceeds, check if manually authorized

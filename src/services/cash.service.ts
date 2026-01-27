@@ -6,7 +6,7 @@ export interface VentaCaja {
     venta_id: string;
     fecha: string;
     total: number;
-    cliente_nombre: string;
+    cliente: string;
     vendedor_id: string;
 }
 

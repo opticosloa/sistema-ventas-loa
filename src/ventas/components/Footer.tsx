@@ -4,10 +4,10 @@ export const Footer = () => {
   return (
     <footer className="absolute inset-x-0 bottom-0 w-full bg-azul text-gray-300 py-6 mt-10">
       <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row justify-between items-center">
-        
+
         {/* Nombre o marca */}
         <span className="text-sm md:text-base font-semibold">
-          © {new Date().getFullYear()} Lavoratorio Óptico Acuña. Todos los derechos reservados.
+          © {new Date().getFullYear()} Laboratorio Óptico Acuña. Todos los derechos reservados.
         </span>
 
         {/* Links de navegación */}

@@ -113,7 +113,7 @@ export const CierreCajaPanel = () => {
     const otrosMedios = Number(summary.total_electronico) + Number(summary.total_obra_social);
 
     return (
-        <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-screen">
+        <div className="p-6 bg-gray-50 dark:bg-gray-900 min-h-screen rounded-lg">
             <h1 className="text-3xl font-bold mb-6 text-gray-800 dark:text-white">Cierre de Caja</h1>
 
             {/* Cards Summary */}
@@ -255,7 +255,7 @@ export const CierreCajaPanel = () => {
                                                 {new Date(venta.fecha).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                             </td>
                                             <td className="p-3 text-sm font-medium text-gray-800 dark:text-gray-200">
-                                                {venta.cliente_nombre}
+                                                {venta.cliente}
                                             </td>
                                             <td className="p-3 text-sm font-bold text-gray-800 dark:text-white text-right">
                                                 {formatCurrency(venta.total)}
