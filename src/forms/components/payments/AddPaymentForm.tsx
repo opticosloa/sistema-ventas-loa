@@ -143,9 +143,8 @@ export const AddPaymentForm: React.FC<AddPaymentFormProps> = ({
                         type="number"
                         value={amountInput || ''}
                         onChange={(e) => setAmountInput(e.target.value)}
-                        className={`input pl-8 w-full text-lg font-bold ${selectedMethod === 'OBRA_SOCIAL' ? 'bg-gray-700 cursor-not-allowed text-gray-400' : ''}`}
+                        className={`input pl-8 w-full text-lg font-bold `}
                         placeholder="0.00"
-                        readOnly={selectedMethod === 'OBRA_SOCIAL'}
                     />
                 </div>
             </div>

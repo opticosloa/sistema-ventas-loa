@@ -195,8 +195,8 @@ export const ListaObrasSociales: React.FC = () => {
                                 <tr>
                                     <th className="px-6 py-4">Nombre</th>
                                     <th className="px-6 py-4">Plan</th>
-                                    <th className="px-6 py-4">Cobertura Fija</th>
-                                    <th className="px-6 py-4">Cobertura %</th>
+                                    <th className="px-6 py-4">Monto Global</th>
+                                    <th className="px-6 py-4">Detalle Cobertura</th>
                                     <th className="px-6 py-4">Instrucciones</th>
                                     <th className="px-6 py-4 text-center">Estado</th>
                                     <th className="px-6 py-4 text-right">Acciones</th>
@@ -227,8 +227,14 @@ export const ListaObrasSociales: React.FC = () => {
                                             </td>
                                             <td className="px-6 py-4 text-xs">
                                                 <div className="flex flex-col gap-1">
-                                                    <span className="text-slate-300">Cristales: <span className="text-green-400 font-bold">{os.cobertura?.porcentaje_cristales || 0}%</span></span>
-                                                    <span className="text-slate-300">Armazones: <span className="text-green-400 font-bold">{os.cobertura?.porcentaje_armazones || 0}%</span></span>
+                                                    <span className="text-slate-300">
+                                                        Cristales: <span className="text-green-400 font-bold">{os.cobertura?.porcentaje_cristales || 0}%</span>
+                                                        {Number(os.cobertura_cristal_max) > 0 && <span className="text-slate-400 ml-1">(Max ${Number(os.cobertura_cristal_max).toLocaleString()})</span>}
+                                                    </span>
+                                                    <span className="text-slate-300">
+                                                        Armazones: <span className="text-green-400 font-bold">{os.cobertura?.porcentaje_armazones || 0}%</span>
+                                                        {Number(os.cobertura_armazon_max) > 0 && <span className="text-slate-400 ml-1">(Max ${Number(os.cobertura_armazon_max).toLocaleString()})</span>}
+                                                    </span>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 text-sm max-w-xs truncate" title={os.instrucciones || ''}>
@@ -348,7 +354,7 @@ export const ListaObrasSociales: React.FC = () => {
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-xs text-slate-400 mb-1">Tope Máximo ($)</label>
+                                                <label className="block text-xs text-slate-400 mb-1">Cobertura Fija Unitario ($)</label>
                                                 <input
                                                     type="number"
                                                     min="0"
@@ -376,7 +382,7 @@ export const ListaObrasSociales: React.FC = () => {
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-xs text-slate-400 mb-1">Tope Máximo ($)</label>
+                                                <label className="block text-xs text-slate-400 mb-1">Cobertura Fija Unitario ($)</label>
                                                 <input
                                                     type="number"
                                                     min="0"

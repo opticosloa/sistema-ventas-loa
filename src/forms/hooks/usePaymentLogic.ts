@@ -213,7 +213,9 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
                 // Ajustamos para manejar si result es un objeto directo o tiene .rows
                 const sale = data.result.saleObj || (data.result.rows ? data.result.rows[0] : data.result);
 
+                console.log("🔍 DEBUG FETCH SALE:", sale);
                 if (sale) {
+
                     // Forzamos el parseo a número para evitar errores de concatenación de strings
                     const rawTotal = parseFloat(sale.total || 0);
                     const discountVal = parseFloat(sale.descuento || 0);
