@@ -44,3 +44,11 @@ export const getCristalStock = async (filters: StockFilter) => {
     const { data } = await LOAApi.get<{ success: boolean; result: any }>(`/api/crystals/search-range?${params.toString()}`);
     return Array.isArray(data.result) ? data.result : [];
 };
+
+export const printLabels = async (productIds: number[], config: { widthMm: number; heightMm: number; fontSize?: number }) => {
+    const response = await LOAApi.post('/api/stock/labels',
+        { productIds, config },
+        { responseType: 'blob' }
+    );
+    return response.data;
+};

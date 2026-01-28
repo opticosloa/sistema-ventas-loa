@@ -814,24 +814,31 @@ export const FormularioVenta: React.FC = () => {
           fecha_nacimiento: null
         };
         const createClientRes = await LOAApi.post('/api/clients', newClientPayload);
+
+        console.log("Respuesta creación cliente:", createClientRes.data);
+
         if (createClientRes.data.success) {
           const resResult = createClientRes.data.result;
-          // Handle variations: { rows: [...] } or direct object
-          if (resResult?.rows?.[0]?.cliente_id) {
-            finalClienteId = resResult.rows[0].cliente_id;
-          } else if (resResult?.cliente_id) {
-            finalClienteId = resResult.cliente_id;
-          } else if (resResult?.id) {
+          const createdClient = resResult?.rows?.[0] || resResult?.[0] || resResult;
+
+          if (createdClient?.sp_cliente_crear) {
+            finalClienteId = createdClient.sp_cliente_crear;
+            // ACTUALIZACIÓN DE ESTADO: Importante para reflejar que el cliente ya existe en el contexto
+            setCliente(createdClient);
+          } else if (resResult?.sp_cliente_crear) { // Fallback directo
+            finalClienteId = resResult.sp_cliente_crear;
+          } else if (resResult?.id) { // Fallback por si cambia nombre
             finalClienteId = resResult.id;
           }
         }
 
         if (!finalClienteId) {
-          throw new Error("No se pudo obtener el ID del cliente creado. Verifique la respuesta del servidor.");
+          throw new Error("El cliente se creó pero no se obtuvo el ID de respuesta.");
         }
-      } catch (e) {
+      } catch (e: any) {
         console.error(e);
-        Swal.fire('Error', "Error creando cliente", 'error');
+        const msg = e.response?.data?.message || e.message || "Error desconocido";
+        Swal.fire('Error', `Error creando cliente: ${msg}`, 'error');
         return;
       }
     }
@@ -978,8 +985,74 @@ export const FormularioVenta: React.FC = () => {
     processSale(false);
   };
 
+  /* -------------------------------------------------------------------------- */
+  /*                             Manejo de Presupuesto                          */
+  /* -------------------------------------------------------------------------- */
   const onBudget = async () => {
-    processSale(true);
+    // 1. Validar que haya items (o receta)
+    // A budget might be just for items or just for a prescription + lenses check
+    const hasItems = allItemsForList.length > 0;
+    if (!hasItems && !formState.lejos_Tipo && !formState.cerca_Tipo) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Presupuesto vacío',
+        text: 'Cargue productos o una receta para generar un presupuesto.'
+      });
+      return;
+    }
+
+    try {
+      Swal.fire({
+        title: 'Generando Presupuesto PDF...',
+        text: 'Por favor espere',
+        allowOutsideClick: false,
+        didOpen: () => Swal.showLoading()
+      });
+
+      // Recalculate totals for consistency
+      const subtotalCalc = allItemsForList.reduce((acc, item) => acc + (item.subtotal || 0), 0) + (extraPrice || 0);
+      const discountVal = discount || 0;
+      const totalCalc = subtotalCalc - discountVal;
+
+      const budgetData = {
+        cliente: cliente || {
+          nombre: formState.clienteName || '',
+          apellido: formState.clienteApellido || '',
+          dni: formState.clienteDNI || ''
+        },
+        items: allItemsForList.map(item => ({
+          nombre: item.producto.nombre,
+          cantidad: item.cantidad,
+          precio_unitario: (item.producto as any).precio_venta || (item.subtotal / item.cantidad), // Fallback
+          subtotal: item.subtotal
+        })),
+        receta: {
+          lejos,
+          cerca,
+          multifocal
+        },
+        totales: {
+          subtotal: subtotalCalc,
+          descuento: discountVal,
+          total: totalCalc
+        },
+        vendedor: nombre || 'Vendedor' // Changed from user?.nombre
+      };
+
+      const response = await LOAApi.post('/api/sales/budget', budgetData, {
+        responseType: 'blob'
+      });
+
+      const pdfBlob = new Blob([response.data], { type: 'application/pdf' });
+      const pdfUrl = URL.createObjectURL(pdfBlob);
+      window.open(pdfUrl, '_blank');
+
+      Swal.close();
+
+    } catch (error) {
+      console.error("Error generating budget:", error);
+      Swal.fire('Error', 'No se pudo generar el presupuesto', 'error');
+    }
   };
 
 

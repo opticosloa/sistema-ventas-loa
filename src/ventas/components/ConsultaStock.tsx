@@ -5,7 +5,7 @@ import LOAApi from '../../api/LOAApi';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { QRCodeSVG } from "qrcode.react";
 import { RefreshButton } from "../../components/ui/RefreshButton";
-import { getCristalStock } from "../../services/stock.api";
+import { getCristalStock, printLabels } from "../../services/stock.api";
 import type { CrystalMaterial } from "../../services/crystals.api";
 import { getMaterials } from "../../services/crystals.api";
 
@@ -89,6 +89,66 @@ export const ConsultaStock: React.FC = () => {
   const [qrModal, setQrModal] = useState<{ open: boolean, value: string, title: string }>({ open: false, value: '', title: '' });
   const [reduceStockModal, setReduceStockModal] = useState<{ open: boolean, product: Producto | null }>({ open: false, product: null });
   const [reduceAmount, setReduceAmount] = useState<string>('1');
+
+  // Label Printing
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [labelConfigModal, setLabelConfigModal] = useState({ open: false, width: 50, height: 25, fontSize: 8 });
+  const [isGeneratingLabels, setIsGeneratingLabels] = useState(false);
+
+  // Toggle selection
+  const toggleSelect = (id: number) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const toggleSelectAll = () => {
+    // Select all displayed in current page
+    const pageIds = pageItems.map(p => p.producto_id);
+    const allSelected = pageIds.every(id => selectedIds.includes(id));
+    if (allSelected) {
+      setSelectedIds(prev => prev.filter(id => !pageIds.includes(id)));
+    } else {
+      setSelectedIds(prev => {
+        const newSet = new Set([...prev, ...pageIds]);
+        return Array.from(newSet);
+      });
+    }
+  };
+
+  const handlePrintLabels = async () => {
+    if (selectedIds.length === 0) return;
+    setLabelConfigModal(prev => ({ ...prev, open: true }));
+  };
+
+  const confirmPrintLabels = async () => {
+    setIsGeneratingLabels(true);
+    try {
+      const blob = await printLabels(selectedIds, {
+        widthMm: labelConfigModal.width,
+        heightMm: labelConfigModal.height,
+        fontSize: labelConfigModal.fontSize
+      });
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setLabelConfigModal(prev => ({ ...prev, open: false }));
+      setSelectedIds([]); // Clear selection after print
+    } catch (e) {
+      console.error("Error printing labels", e);
+      Swal.fire("Error", "No se pudo generar el PDF", "error");
+    } finally {
+      setIsGeneratingLabels(false);
+    }
+  };
+
+  // Helper for estimation
+  const estimateLabels = () => {
+    const margin = 10; // 5mm each side
+    const w = 210 - margin;
+    const h = 297 - margin;
+    const cols = Math.floor(w / labelConfigModal.width);
+    const rows = Math.floor(h / labelConfigModal.height);
+    return cols * rows;
+  };
+
 
   // Filter Logic
   const filtered = useMemo(() => {
@@ -275,6 +335,27 @@ export const ConsultaStock: React.FC = () => {
         </div>
       )}
 
+      {/* SELECTION BAR */}
+      {selectedIds.length > 0 && activeInfoTab === 'products' && (
+        <div className="bg-celeste/20 border border-celeste text-azul px-4 py-2 rounded-lg mb-4 flex items-center justify-between">
+          <span className="font-medium">{selectedIds.length} productos seleccionados</span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setSelectedIds([])}
+              className="text-sm text-gray-600 hover:text-black hover:underline"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handlePrintLabels}
+              className="bg-azul text-white px-3 py-1.5 rounded shadow hover:bg-azul/90 flex items-center gap-2"
+            >
+              <span>🖨️</span> Imprimir Etiquetas
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* CRYSTALS CONTROLS */}
       {activeInfoTab === 'crystals' && (
         <div className="bg-azul/10 border border-crema rounded-lg p-3 mb-4">
@@ -396,12 +477,20 @@ export const ConsultaStock: React.FC = () => {
           <table className="min-w-full table-fixed">
             <thead className="bg-gray-100">
               <tr>
+                <th className="px-4 py-3 text-center w-[5%]">
+                  <input
+                    type="checkbox"
+                    checked={pageItems.length > 0 && pageItems.every(p => selectedIds.includes(p.producto_id))}
+                    onChange={toggleSelectAll}
+                    className="w-4 h-4 rounded border-gray-300 text-azul focus:ring-celeste"
+                  />
+                </th>
                 <th className="px-4 py-3 text-left text-sm w-[25%]">Nombre</th>
                 <th className="px-4 py-3 text-center text-sm w-[10%]">QR</th>
                 <th className="px-4 py-3 text-left text-sm w-[20%]">Ubicación</th>
                 <th className="px-4 py-3 text-left text-sm w-[10%]">Tipo</th>
                 <th className="px-4 py-3 text-center text-sm w-[10%]">Stock</th>
-                <th className="px-4 py-3 text-right text-sm w-[25%]">Acciones</th>
+                <th className="px-4 py-3 text-right text-sm w-[20%]">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -410,6 +499,14 @@ export const ConsultaStock: React.FC = () => {
                   key={p.producto_id}
                   className={`border-b last:border-0 border-gray-100 transition-colors ${p.is_active ? 'hover:bg-amber-50' : 'bg-gray-100 opacity-60 hover:bg-gray-200'}`}
                 >
+                  <td className="px-4 py-2 text-center">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(p.producto_id)}
+                      onChange={() => toggleSelect(p.producto_id)}
+                      className="w-4 h-4 rounded border-gray-300 text-azul focus:ring-celeste"
+                    />
+                  </td>
                   <td className="px-4 py-2 text-sm truncate" title={p.nombre}>
                     {p.nombre}
                     {!p.is_active && (
@@ -438,8 +535,7 @@ export const ConsultaStock: React.FC = () => {
                     >
                       - Stock
                     </button>
-                    <button className="text-blue-600 hover:underline" onClick={() => console.log("Detalle", p.producto_id)}>Detalle</button>
-                    <button className="text-gray-500 hover:underline" onClick={() => console.log("Mover", p.producto_id)}>Mover</button>
+                    {/* <button className="text-blue-600 hover:underline" onClick={() => console.log("Detalle", p.producto_id)}>Detalle</button> */}
                   </td>
                 </tr>
               ))}
@@ -551,6 +647,72 @@ export const ConsultaStock: React.FC = () => {
             <div className="flex gap-2">
               <button onClick={() => setReduceStockModal({ open: false, product: null })} className="flex-1 btn-secondary py-2">Cancelar</button>
               <button onClick={confirmReduceStock} className="flex-1 bg-red-600 text-white rounded font-bold hover:bg-red-700 py-2">Confirmar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* LABEL CONFIG MODAL */}
+      {labelConfigModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-white rounded-xl p-6 max-w-sm w-full shadow-xl">
+            <h3 className="text-lg font-bold mb-4">Configurar Etiquetas</h3>
+
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Ancho (mm)</label>
+                <input
+                  type="number"
+                  value={labelConfigModal.width}
+                  onChange={e => setLabelConfigModal(p => ({ ...p, width: parseFloat(e.target.value) || 0 }))}
+                  className="input w-full"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">Alto (mm)</label>
+                <input
+                  type="number"
+                  value={labelConfigModal.height}
+                  onChange={e => setLabelConfigModal(p => ({ ...p, height: parseFloat(e.target.value) || 0 }))}
+                  className="input w-full"
+                />
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-xs text-gray-500 mb-1">Tamaño Fuente (pt)</label>
+              <input
+                type="number"
+                value={labelConfigModal.fontSize}
+                onChange={e => setLabelConfigModal(p => ({ ...p, fontSize: parseFloat(e.target.value) || 0 }))}
+                className="input w-full"
+              />
+            </div>
+
+            <div className="p-3 bg-gray-100 rounded text-xs text-gray-600 mb-4">
+              <p>🖨️ Hoja A4 estandár</p>
+              <p>Con estas medidas entran aprox. <b>{estimateLabels()}</b> etiquetas por hoja.</p>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setLabelConfigModal(p => ({ ...p, open: false }))}
+                className="btn-secondary flex-1 py-2"
+                disabled={isGeneratingLabels}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmPrintLabels}
+                disabled={isGeneratingLabels || labelConfigModal.width <= 0 || labelConfigModal.height <= 0}
+                className="btn-primary flex-1 py-2 flex justify-center items-center"
+              >
+                {isGeneratingLabels ? (
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                ) : (
+                  "Generar PDF"
+                )}
+              </button>
             </div>
           </div>
         </div>
