@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { CoverageSummary } from './CoverageSummary';
 import type { MetodoPago } from '../../../types/Pago';
 import type { ObraSocial } from '../../../types/ObraSocial';
 
@@ -17,6 +18,7 @@ interface AddPaymentFormProps {
     setNroOrden?: (val: string) => void;
     onCoverInsurance?: () => void;
     hasSocialWorkPayment?: boolean;
+    coverageDetails?: { totalCoverage: number; itemsDetail: { name: string; amount: number; reason: string }[] };
 }
 
 const metodos: { id: MetodoPago; label: string; icon: string }[] = [
@@ -39,9 +41,48 @@ export const AddPaymentForm: React.FC<AddPaymentFormProps> = ({
     nroOrden = '',
     setNroOrden,
     // onCoverInsurance
-    hasSocialWorkPayment = false
+    hasSocialWorkPayment = false,
+    coverageDetails
 }) => {
     const selectedOS = obrasSociales.find(os => os.obra_social_id === selectedObraSocialId);
+
+    // Grouping Logic
+    const groupedOS = useMemo(() => {
+        const groups: Record<string, ObraSocial[]> = {};
+        obrasSociales.forEach(os => {
+            if (!groups[os.nombre]) groups[os.nombre] = [];
+            groups[os.nombre].push(os);
+        });
+        return groups;
+    }, [obrasSociales]);
+
+    const entityNames = useMemo(() => Object.keys(groupedOS).sort(), [groupedOS]);
+
+    // Local state for Entity selection
+    const [selectedEntity, setSelectedEntity] = useState<string>('');
+
+    // Sync Entity when ID changes (e.g. from parent or pre-selection)
+    useEffect(() => {
+        if (selectedObraSocialId && selectedOS) {
+            setSelectedEntity(selectedOS.nombre);
+        } else if (!selectedObraSocialId) {
+            // Maybe reset? No, keep entity if user is browsing
+        }
+    }, [selectedObraSocialId, selectedOS]);
+
+    // Handler for Entity Change
+    const handleEntityChange = (entityName: string) => {
+        setSelectedEntity(entityName);
+        const plans = groupedOS[entityName] || [];
+
+        // Auto-select if only 1 option
+        if (plans.length === 1 && setSelectedObraSocialId) {
+            setSelectedObraSocialId(String(plans[0].obra_social_id));
+        } else if (setSelectedObraSocialId) {
+            setSelectedObraSocialId(''); // Reset for user to choose plan
+        }
+    };
+
     return (
         <>
             <h3 className="text-lg font-medium mb-4">Agregar Método</h3>
@@ -70,20 +111,45 @@ export const AddPaymentForm: React.FC<AddPaymentFormProps> = ({
             {selectedMethod === 'OBRA_SOCIAL' && (
                 <div className="mb-6 p-4 bg-gray-700/50 rounded-lg border border-gray-600">
                     <div className="mb-4">
-                        <label className="block text-sm text-gray-300 mb-1">Seleccionar Obra Social</label>
+                        <label className="block text-sm text-gray-300 mb-1">Entidad (Obra Social)</label>
                         <select
-                            value={selectedObraSocialId || ''}
-                            onChange={(e) => setSelectedObraSocialId && setSelectedObraSocialId(e.target.value)}
-                            className="input w-full"
+                            value={selectedEntity}
+                            onChange={(e) => handleEntityChange(e.target.value)}
+                            className="input w-full mb-3"
                         >
-                            <option value="">Seleccione...</option>
-                            {obrasSociales.map(os => (
-                                <option key={os.obra_social_id} value={os.obra_social_id}>
-                                    {os.nombre}
-                                </option>
+                            <option value="">Seleccione Entidad...</option>
+                            {entityNames.map(name => (
+                                <option key={name} value={name}>{name}</option>
                             ))}
                         </select>
+
+                        {/* Plan Selector (Only if Entity selected and has multiple plans or needs selection) */}
+                        {selectedEntity && (groupedOS[selectedEntity]?.length > 1 || (groupedOS[selectedEntity]?.length === 1 && groupedOS[selectedEntity][0].plan)) && (
+                            <div className="mt-2">
+                                <label className="block text-sm text-gray-300 mb-1">Plan</label>
+                                <select
+                                    value={selectedObraSocialId || ''}
+                                    onChange={(e) => setSelectedObraSocialId && setSelectedObraSocialId(e.target.value)}
+                                    className="input w-full"
+                                >
+                                    <option value="">Seleccione Plan...</option>
+                                    {groupedOS[selectedEntity].map(os => (
+                                        <option key={os.obra_social_id} value={os.obra_social_id}>
+                                            {os.plan ? os.plan : 'Único Plan'}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
                     </div>
+
+                    {/* COVERAGE SUMMARY - TABLE (Task 4) */}
+                    {selectedObraSocialId && coverageDetails && coverageDetails.totalCoverage > 0 && (
+                        <CoverageSummary
+                            details={coverageDetails.itemsDetail}
+                            total={coverageDetails.totalCoverage}
+                        />
+                    )}
 
                     {selectedOS && (
                         <div className="mb-4 text-sm text-gray-300">

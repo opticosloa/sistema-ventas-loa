@@ -92,7 +92,7 @@ export const FormularioVenta: React.FC = () => {
   const { dolarRate, obrasSociales, materials, treatments } = useVentaData();
 
   const [selectedObraSocialId, setSelectedObraSocialId] = useState<string>("");
-  const [calculatedCoverage, setCalculatedCoverage] = useState(0);
+
 
   // Tabs: 'optica' | 'retail'
   const [activeTab, setActiveTab] = useState<'optica' | 'retail'>('optica');
@@ -335,51 +335,7 @@ export const FormularioVenta: React.FC = () => {
   // ... (Lines 163-305 kept same logic for effects)
 
 
-  const calculateCoverage = async () => {
-    if (!selectedObraSocialId) {
-      if (calculatedCoverage > 0) {
-        setDiscount(0);
-        setCalculatedCoverage(0);
-      }
-      return;
-    }
 
-    const os = obrasSociales.find(o => o.obra_social_id === selectedObraSocialId);
-    if (!os) return;
-
-    // Dynamically import helper
-    const { calculateOpticalCoverage } = await import('../helpers/salesHelpers');
-
-    let totalDisc = 0;
-    const { porcentaje_cristales, porcentaje_armazones } = os.cobertura || { porcentaje_cristales: 0, porcentaje_armazones: 0 };
-
-    // 1. Calculate from Cart (Retail items)
-    const cartDisc = calculateOpticalCoverage(cart, os, dolarRate);
-    totalDisc += cartDisc;
-
-    // 2. Calculate from Form State (Optic items not in cart)
-    // Cristales
-    const crystalsPrice = opticItems.lejos_OD.price + opticItems.lejos_OI.price + opticItems.cerca_OD.price + opticItems.cerca_OI.price;
-    if (crystalsPrice > 0 && porcentaje_cristales > 0) {
-      totalDisc += crystalsPrice * (porcentaje_cristales / 100);
-    }
-
-    // Armazones (if selected in form dropdown 'armazon')
-    // Armazones (if selected in form dropdown 'armazon')
-    if (formState.armazon && opticItems.armazon.price > 0 && porcentaje_armazones > 0) {
-      totalDisc += opticItems.armazon.price * (porcentaje_armazones / 100);
-    }
-
-    const finalDisc = Number(totalDisc.toFixed(2));
-    setDiscount(finalDisc);
-    setCalculatedCoverage(finalDisc);
-  };
-
-  useEffect(() => {
-    calculateCoverage();
-  }, [cart, opticItems, selectedObraSocialId, dolarRate]);
-
-  // 1. Nueva lógica de verificación de stock y advertencia
   const checkCrystalStock = async (prefix: 'lejos' | 'cerca', ojo: 'OD' | 'OI') => {
     const esf = formState[`${prefix}_${ojo}_Esf` as keyof FormValues];
     const cil = formState[`${prefix}_${ojo}_Cil` as keyof FormValues];
@@ -968,7 +924,8 @@ export const FormularioVenta: React.FC = () => {
           state: {
             ventaId: ventaId,
             total: totalVenta,
-            isDirectSale: activeTab === 'retail'
+            isDirectSale: activeTab === 'retail',
+            preSelectedObraSocialId: selectedObraSocialId
           }
         });
       }
@@ -1105,11 +1062,7 @@ export const FormularioVenta: React.FC = () => {
                 </option>
               ))}
             </select>
-            {selectedObraSocialId && calculatedCoverage > 0 && (
-              <p className="text-xs text-green-400 mt-1">
-                Cobertura aplicada: {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(calculatedCoverage)}
-              </p>
-            )}
+
           </div>
         </div>
 

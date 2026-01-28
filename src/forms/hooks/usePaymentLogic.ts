@@ -66,6 +66,8 @@ export interface UsePaymentLogicReturn {
     setNroOrden: (val: string) => void;
     handleCoverInsurance: () => void;
     isDirectSale: boolean;
+    payOnPickupDisabled: boolean;
+    coverageDetails: { totalCoverage: number; itemsDetail: { name: string; amount: number; reason: string }[] };
 }
 
 export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLogicReturn => {
@@ -161,31 +163,212 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
     const totalPagado = pagos.reduce((acc, p) => acc + (p.confirmed ? (Number(p.monto) || 0) : 0), 0);
     const restante = Math.max(0, currentTotal - totalPagado);
 
-    // AUTO-CALCULO COBERTURA FIJA (Solo sugerir monto, NO agregar pago)
+    // LOGICA TAREA 1: Bloquear "Pagar al Retirar"
+    // Bloquear si hay pagos parciales cargados O si hay una Obra Social seleccionada/cargada
+    const hasPayments = pagos.length > 0;
+    const hasOSActive = !!selectedObraSocialId || pagos.some(p => p.metodo === 'OBRA_SOCIAL');
+    const payOnPickupDisabled = hasPayments || hasOSActive;
+
+
+    const [coverageDetails, setCoverageDetails] = useState<{
+        totalCoverage: number;
+        itemsDetail: { name: string; amount: number; reason: string }[];
+    }>({ totalCoverage: 0, itemsDetail: [] });
+
+    // COMPLEX COVERAGE LOGIC
     useEffect(() => {
         if (selectedMethod === 'OBRA_SOCIAL' && selectedObraSocialId) {
             const os = obrasSociales.find(o => String(o.obra_social_id) === String(selectedObraSocialId));
+            if (!os) return;
 
-            if (os && os.monto_cobertura_total && Number(os.monto_cobertura_total) > 0) {
-                const coberturaFija = Number(os.monto_cobertura_total);
-                const montoCubierto = Math.min(currentTotal, coberturaFija);
+            // Caps
+            const capCristal = Number(os.cobertura_cristal_max) || 0;
+            const capArmazon = Number(os.cobertura_armazon_max) || 0;
+            const capGlobal = Number(os.monto_cobertura_total) || 0;
+            // Legacy percentages
+            const pctCristal = os.cobertura?.porcentaje_cristales || 0;
+            const pctArmazon = os.cobertura?.porcentaje_armazones || 0;
 
-                // Mostrar notificación informativa
-                Swal.fire({
-                    title: 'Cobertura Fija Detectada',
-                    text: `La obra social cubre hasta $${montoCubierto}. Complete el Nro. de Orden y agregue el pago.`,
-                    icon: 'info',
-                    timer: 2500,
-                    showConfirmButton: true
-                });
+            let totalCalculated = 0;
+            const details: { name: string; amount: number; reason: string }[] = [];
 
-                // Pre-llenar el input de monto con lo que cubre la OS
-                setAmountInput(montoCubierto.toFixed(2));
+            // Helper to decide item coverage
+            const calculateItemCoverage = (item: any) => {
+                const price = item.producto.precio_venta * item.cantidad;
+                const name = item.producto.nombre.toLowerCase();
+                let covered = 0;
+                let reason = '';
+
+                const isCristal = name.includes('cristal') || name.includes('lente') || item.producto.nombre.includes('Cristal'); // Basic heuristic
+                const isArmazon = name.includes('armazon') || name.includes('montura');
+
+                // Priority 1: Specific Fixed Coverage
+                if (isCristal && capCristal > 0) {
+                    covered = Math.min(price, capCristal * item.cantidad); // Cap per unit or total? Usually per unit. Let's assume per unit * qty
+                    reason = `Top Cristal ($${capCristal}/u)`;
+                } else if (isArmazon && capArmazon > 0) {
+                    covered = Math.min(price, capArmazon * item.cantidad);
+                    reason = `Top Armazón ($${capArmazon}/u)`;
+                }
+                // Priority 3: Percentage (Fallback if no specific cap? Or if P1 didn't apply?)
+                // Spec says: "Si no aplicó P1 ni P2...". Wait, P2 is Global.
+                // Global is applied at the END.
+                // So if P1 didn't apply, we check Percentage?
+                else {
+                    if (isCristal && pctCristal > 0) {
+                        covered = price * (pctCristal / 100);
+                        reason = `${pctCristal}% Cobertura`;
+                    } else if (isArmazon && pctArmazon > 0) {
+                        covered = price * (pctArmazon / 100);
+                        reason = `${pctArmazon}% Cobertura`;
+                    }
+                }
+
+                return { covered, reason };
+            };
+
+            // Iterar items
+            saleItems.forEach(item => {
+                // Dentro del loop: saleItems.forEach(item => {
+                const name = item.producto.nombre.toLowerCase();
+                const isCristal = name.includes('cristal') || name.includes('lente') || name.includes('organico') || name.includes('poly') || name.includes('mineral'); // Agregué keywords comunes temporalmente
+
+                console.log(`🔍 DEBUG ITEM: ${name}`);
+                console.log(`   - Detectado como Cristal? ${isCristal}`);
+                console.log(`   - Tope Cristal Configurado: ${capCristal}`);
+                // ... resto del código
+                const { covered, reason } = calculateItemCoverage(item);
+                if (covered > 0) {
+                    totalCalculated += covered;
+                    details.push({
+                        name: item.producto.nombre,
+                        amount: covered,
+                        reason
+                    });
+                }
+            });
+
+            // Priority 2: Global Fija (Si no aplicó P1... wait, logic says "Si no aplicó la P1 y existe monto_cobertura_total")
+            // This implies Global Cap serves as a fallback or a clamp?
+            // "Si no aplicó la P1 y existe monto global > 0: Cobertura = MIN(remaining, monto_global)"
+            // This is ambiguous. Does it replace everything?
+            // "Prioridad 2... Si no aplicó la P1". Means if we didn't use Crystal/Frame caps?
+            // Or does it mean "If total coverage so far is 0"?
+            // Usually Global Cap is a generic "We cover up to $X for the whole receipt".
+            // Let's assume if totalCalculated (from P1/P3) is 0, we check Global.
+
+            if (totalCalculated === 0 && capGlobal > 0) {
+                // Cover up to capGlobal
+                const coverage = Math.min(currentTotal, capGlobal);
+                totalCalculated = coverage;
+                details.push({ name: 'Cobertura Global', amount: coverage, reason: `Tope Global $${capGlobal}` });
+            }
+
+            // Also, logic says "Si no aplicó P1 ni P2, usar porcentajes".
+            // My code applied P1 OR P3 (Percentage) at item level.
+            // Let's align strictly:
+            // Loop Items:
+            //   Check P1 (Specific Cap). If hit, use it.
+            //   If miss P1, continue.
+            // After Loop: 
+            //   If total > 0, we used P1/P3 (mixed?).
+            //   If total == 0 AND Global Cap > 0 -> Use Global Cap.
+            //   If total == 0 AND Global Cap == 0 -> We might have used P3 in loop?
+
+            // Re-reading T3:
+            // "Iterar sobre los ítems... Prioridad 1... Si es Cristal y existe top... Si es Armazon y existe tope..."
+            // "Prioridad 2 (Global): Si no aplicó la P1 y existe monto... Cobertura = MIN(restante, global)"
+            // "Prioridad 3 (Porcentajes): Si no aplicó P1 ni P2..."
+
+            // This suggests a per-item check? Or per-strategy?
+            // "Iterar sobre los items" suggests P1 is item-based.
+            // But P2 is "Global".
+            // Maybe: Try P1 for all items. If we got something, that's it?
+            // Or can we mix P1 for crystals and P3 for frames?
+            // "Si no aplicó la P1" likely means "For this item" or "For the sale"?
+            // "Cobertura es por íntem".
+            // OK, so for EACH ITEM:
+            //   Check P1. If hit, sum.
+            //   If miss P1, check P2 (Global?? No, global is global).
+            //   Maybe Global is "If NO specific caps exist for ANY item, use Global Cap for whole sale"?
+
+            // Let's implement:
+            // 1. Calculate P1 for all items.
+            // 2. If Sum P1 > 0, use P1 result.
+            // 3. If Sum P1 == 0:
+            //    Check P2 (Global). If > 0, use MIN(total, Global).
+            //    If P2 == 0:
+            //       Calculate P3 (Percentages) for all items.
+
+            // Corrected Implementation based on this interpretation:
+
+            // Pass 1: Item Specific Caps
+            let sumP1 = 0;
+            const detailsP1: any[] = [];
+            let p1Applied = false;
+
+            saleItems.forEach(item => {
+                const name = item.producto.nombre.toLowerCase();
+                const isCristal = name.includes('cristal') || name.includes('lente');
+                const isArmazon = name.includes('armazon') || name.includes('montura');
+                const price = item.producto.precio_venta * item.cantidad;
+
+                if (isCristal && capCristal > 0) {
+                    const cov = Math.min(price, capCristal * item.cantidad);
+                    sumP1 += cov;
+                    detailsP1.push({ name: item.producto.nombre, amount: cov, reason: 'Tope Cristal' });
+                    p1Applied = true;
+                } else if (isArmazon && capArmazon > 0) {
+                    const cov = Math.min(price, capArmazon * item.cantidad);
+                    sumP1 += cov;
+                    detailsP1.push({ name: item.producto.nombre, amount: cov, reason: 'Tope Armazón' });
+                    p1Applied = true;
+                }
+            });
+
+            if (p1Applied) {
+                totalCalculated = sumP1;
+                details.push(...detailsP1);
             } else {
-                setAmountInput('');
+                // Pass 2: Global Cap
+                if (capGlobal > 0) {
+                    totalCalculated = Math.min(currentTotal, capGlobal);
+                    details.push({ name: 'Global', amount: totalCalculated, reason: 'Tope Global' });
+                } else {
+                    // Pass 3: Percentages
+                    saleItems.forEach(item => {
+                        const name = item.producto.nombre.toLowerCase();
+                        const price = item.producto.precio_venta * item.cantidad;
+                        const isCristal = name.includes('cristal') || name.includes('lente');
+                        const isArmazon = name.includes('armazon') || name.includes('montura');
+
+                        let cov = 0;
+                        if (isCristal && pctCristal > 0) {
+                            cov = price * (pctCristal / 100);
+                            details.push({ name: item.producto.nombre, amount: cov, reason: `${pctCristal}%` });
+                        } else if (isArmazon && pctArmazon > 0) {
+                            cov = price * (pctArmazon / 100);
+                            details.push({ name: item.producto.nombre, amount: cov, reason: `${pctArmazon}%` });
+                        }
+                        totalCalculated += cov;
+                    });
+                }
+            }
+
+            setCoverageDetails({
+                totalCoverage: totalCalculated,
+                itemsDetail: details
+            });
+            setAmountInput(totalCalculated.toFixed(2));
+
+        } else {
+            // Reset if not OS
+            setCoverageDetails({ totalCoverage: 0, itemsDetail: [] });
+            if (selectedMethod !== 'MP') { // MP handles its own?
+                // Don't reset amountInput blindly if user is typing, but here we changed method.
             }
         }
-    }, [selectedObraSocialId, selectedMethod, obrasSociales, currentTotal]);
+    }, [selectedObraSocialId, selectedMethod, obrasSociales, currentTotal, saleItems]);
 
     // Sync with location state on mount
     useEffect(() => {
@@ -194,6 +377,10 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
             setVentaId(state.ventaId);
             if (state.total) setCurrentTotal(state.total);
             if (state.isDirectSale !== undefined) setIsDirectSale(state.isDirectSale);
+        }
+        if (state?.preSelectedObraSocialId) {
+            setSelectedMethod('OBRA_SOCIAL'); // Auto-select method
+            setSelectedObraSocialId(state.preSelectedObraSocialId);
         }
     }, [location]);
 
@@ -522,15 +709,18 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
         const totalPagadoReal = pagosReales.reduce((acc, p) => acc + (p.confirmed ? (Number(p.monto) || 0) : 0), 0);
         const totalPagadoOS = pagosOS.reduce((acc, p) => acc + (p.confirmed ? (Number(p.monto) || 0) : 0), 0);
 
-        // Base para el cliente = Total - lo que cubre la obra social
-        const baseCliente = Math.max(0, currentTotal - totalPagadoOS);
-        const montoMinimo = baseCliente * 0.30;
+
+        // Base para Seña = Total de la Venta (Sin restar OS)
+        const montoMinimo = currentTotal * 0.30;
+
+        // El pago real + pago OS debe cubrir la seña
+        const totalPagadoTotal = totalPagadoReal + totalPagadoOS;
 
         // Filter out already confirmed payments (MP, etc) for POST request
         const newPayments = pagos.filter(p => !p.confirmed || !p.readonly);
 
         const isFullyPaid = restante <= 0.01;
-        const isMinimoCubierto = totalPagadoReal >= (montoMinimo - 100); // Margen de error $100
+        const isMinimoCubierto = totalPagadoTotal >= (montoMinimo - 100); // Margen de error $100
 
         // Si es Venta Directa -> NO PERMITIR SEÑA (Debe ser pago total)
         if (isDirectSale) {
@@ -550,11 +740,13 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
             // WARN but allow continue
             Swal.fire({
                 title: 'Seña Insuficiente',
-                html: `El pago mínimo sugerido es <b>$${Math.round(montoMinimo)}</b> (30%).<br>Pagado: $${totalPagadoReal}.<br><br>¿Desea continuar de todos modos?`,
+                html: `El pago mínimo sugerido es <b>$${Math.round(montoMinimo)}</b> (30%).<br>Pagado: $${totalPagadoReal}.<br><br>¿Qué desea hacer?`,
                 icon: 'warning',
                 showCancelButton: true,
-                confirmButtonText: 'Sí, continuar',
-                cancelButtonText: 'Cancelar'
+                confirmButtonText: 'Generar Orden (Sin/Baja Seña)',
+                cancelButtonText: 'Volver a Pagos',
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#777'
             }).then((result) => {
                 if (result.isConfirmed) {
                     processSale(newPayments);
@@ -630,9 +822,27 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
             // CREAR TICKET AUTOMÁTICAMENTE
             // Ensure we have clientId. If not set in state, fallback to fetching it? 
             // Usually fetchSaleDetails sets it.
+            // CREAR TICKET AUTOMÁTICAMENTE
             if (!isDirectSale && ventaId) {
-                // Determine client ID falling back if state is empty (though fetchSaleDetails should have set it)
-                const targetClientId = clientId;
+                let targetClientId = clientId;
+
+                // Fallback: Si no tenemos clientId en estado, lo buscamos de la venta
+                if (!targetClientId) {
+                    try {
+                        console.warn("⚠️ ClientId missing in state. Fetching from API...");
+                        const { data: saleData } = await LOAApi.get(`/api/sales/${ventaId}`);
+                        console.log(saleData)
+                        const fetchedSale = saleData.result?.saleObj || (saleData.result?.rows ? saleData.result.rows[0] : saleData.result);
+                        if (fetchedSale?.cliente_id) {
+                            targetClientId = fetchedSale.cliente_id;
+                            setClientId(targetClientId); // Synced for UI
+                        }
+                    } catch (err) {
+                        console.error("Error fetching sale for clientId fallback", err);
+                    }
+                }
+
+                console.log("🔍 Auto-Creating Ticket... Venta:", ventaId, "Cliente:", targetClientId, "UID:", uid);
 
                 if (targetClientId && uid) {
                     await LOAApi.post('/api/tickets', {
@@ -644,6 +854,7 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
                     });
                 } else {
                     console.warn("Skipping ticket creation: missing clientId or uid", { clientId: targetClientId, uid });
+                    Swal.fire("Atención", "No se pudo generar el ticket de taller automáticamente (Falta Cliente o Usuario). Avise a soporte.", "warning");
                 }
             }
 
@@ -853,6 +1064,8 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
         nroOrden,
         setNroOrden,
         handleCoverInsurance,
-        isDirectSale
+        isDirectSale,
+        payOnPickupDisabled,
+        coverageDetails
     };
 };

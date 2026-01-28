@@ -43,6 +43,13 @@ export const Dashboard = () => {
 
             <button
               className="bg-gray-100 border border-gray-300 shadow-sm rounded-lg h-28 flex items-center justify-center text-lg font-medium hover:bg-crema hover:opacity-90 transition"
+              onClick={() => navigate("/admin/nueva-venta/pago")}
+            >
+              Pagos
+            </button>
+
+            <button
+              className="bg-gray-100 border border-gray-300 shadow-sm rounded-lg h-28 flex items-center justify-center text-lg font-medium hover:bg-crema hover:opacity-90 transition"
               onClick={() => navigate("/admin/clientes")}
             >
               Clientes

@@ -30,10 +30,10 @@ export const AppRouter = () => {
                 <Route path="clientes" element={<ConsultaCliente />} />
                 <Route path="estadisticas" element={<Estadisticas />} />
                 <Route path="nueva-venta" element={<FormularioVenta />} />
+                <Route path="nueva-venta/pago" element={<FormularioDePago />} />
                 <Route path="empleados" element={<ListaEmpleados />} />
                 <Route path="taller" element={<TicketList />} />
                 <Route path="devoluciones" element={<DevolucionesPage />} />
-                <Route path="nueva-venta/pago" element={<FormularioDePago />} />
                 <Route path="entregas" element={<FormularioDeEntregaTicket />} />
 
                 {/* NUEVAS RUTAS ADMIN */}

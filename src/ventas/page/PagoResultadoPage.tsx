@@ -75,6 +75,13 @@ export const PagoResultadoPage = () => {
             <h2 className="text-xl font-bold">{title}</h2>
             <p className="text-gray-300">La venta se registró correctamente.</p>
 
+            {estado === 'PENDIENTE' && (
+                <div className="bg-blue-900/50 border border-blue-500 text-blue-200 p-4 rounded-lg mt-4 max-w-md text-center">
+                    <p className="font-semibold">⚠️ Orden de taller generada</p>
+                    <p className="text-sm mt-1">Saldo pendiente sujeto a condiciones de la óptica.</p>
+                </div>
+            )}
+
             <div className="flex gap-4 mt-4">
                 <button
                     onClick={handlePrintClick}

@@ -54,7 +54,9 @@ export const FormularioDePago: React.FC = () => {
     setNroOrden,
     handleCoverInsurance,
     isDirectSale,
-    handlePayOnPickup
+    handlePayOnPickup,
+    payOnPickupDisabled,
+    coverageDetails
   } = usePaymentLogic();
 
   return (
@@ -112,6 +114,7 @@ export const FormularioDePago: React.FC = () => {
               setNroOrden={setNroOrden}
               onCoverInsurance={handleCoverInsurance}
               hasSocialWorkPayment={pagos.some(p => p.metodo === 'OBRA_SOCIAL')}
+              coverageDetails={coverageDetails}
             />
 
             <PaymentActionButtons
@@ -119,6 +122,7 @@ export const FormularioDePago: React.FC = () => {
               currentTotal={currentTotal}
               onPay={onSubmit}
               onAuthorize={isDirectSale ? undefined : handlePayOnPickup}
+              payOnPickupDisabled={payOnPickupDisabled}
             />
           </div>
         </div>
