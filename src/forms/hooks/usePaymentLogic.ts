@@ -192,137 +192,53 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
             let totalCalculated = 0;
             const details: { name: string; amount: number; reason: string }[] = [];
 
-            // Helper to decide item coverage
-            const calculateItemCoverage = (item: any) => {
-                const price = item.producto.precio_venta * item.cantidad;
-                const name = item.producto.nombre.toLowerCase();
-                let covered = 0;
-                let reason = '';
-
-                const isCristal = name.includes('cristal') || name.includes('lente') || item.producto.nombre.includes('Cristal'); // Basic heuristic
-                const isArmazon = name.includes('armazon') || name.includes('montura');
-
-                // Priority 1: Specific Fixed Coverage
-                if (isCristal && capCristal > 0) {
-                    covered = Math.min(price, capCristal * item.cantidad); // Cap per unit or total? Usually per unit. Let's assume per unit * qty
-                    reason = `Top Cristal ($${capCristal}/u)`;
-                } else if (isArmazon && capArmazon > 0) {
-                    covered = Math.min(price, capArmazon * item.cantidad);
-                    reason = `Top Armazón ($${capArmazon}/u)`;
-                }
-                // Priority 3: Percentage (Fallback if no specific cap? Or if P1 didn't apply?)
-                // Spec says: "Si no aplicó P1 ni P2...". Wait, P2 is Global.
-                // Global is applied at the END.
-                // So if P1 didn't apply, we check Percentage?
-                else {
-                    if (isCristal && pctCristal > 0) {
-                        covered = price * (pctCristal / 100);
-                        reason = `${pctCristal}% Cobertura`;
-                    } else if (isArmazon && pctArmazon > 0) {
-                        covered = price * (pctArmazon / 100);
-                        reason = `${pctArmazon}% Cobertura`;
-                    }
-                }
-
-                return { covered, reason };
-            };
-
-            // Iterar items
-            saleItems.forEach(item => {
-                // Dentro del loop: saleItems.forEach(item => {
-                const name = item.producto.nombre.toLowerCase();
-                const isCristal = name.includes('cristal') || name.includes('lente') || name.includes('organico') || name.includes('poly') || name.includes('mineral'); // Agregué keywords comunes temporalmente
-
-                console.log(`🔍 DEBUG ITEM: ${name}`);
-                console.log(`   - Detectado como Cristal? ${isCristal}`);
-                console.log(`   - Tope Cristal Configurado: ${capCristal}`);
-                // ... resto del código
-                const { covered, reason } = calculateItemCoverage(item);
-                if (covered > 0) {
-                    totalCalculated += covered;
-                    details.push({
-                        name: item.producto.nombre,
-                        amount: covered,
-                        reason
-                    });
-                }
+            // 1. SORT ITEMS by Unit Price DESC (to prioritize expensive frames)
+            // Clone first to not mutate state
+            const sortedItems = [...saleItems].sort((a, b) => {
+                const priceA = a.producto.precio_venta;
+                const priceB = b.producto.precio_venta;
+                return priceB - priceA;
             });
 
-            // Priority 2: Global Fija (Si no aplicó P1... wait, logic says "Si no aplicó la P1 y existe monto_cobertura_total")
-            // This implies Global Cap serves as a fallback or a clamp?
-            // "Si no aplicó la P1 y existe monto global > 0: Cobertura = MIN(remaining, monto_global)"
-            // This is ambiguous. Does it replace everything?
-            // "Prioridad 2... Si no aplicó la P1". Means if we didn't use Crystal/Frame caps?
-            // Or does it mean "If total coverage so far is 0"?
-            // Usually Global Cap is a generic "We cover up to $X for the whole receipt".
-            // Let's assume if totalCalculated (from P1/P3) is 0, we check Global.
+            // Counters
+            let armazonesCubiertos = 0;
+            const MAX_ARMAZONES = 1;
 
-            if (totalCalculated === 0 && capGlobal > 0) {
-                // Cover up to capGlobal
-                const coverage = Math.min(currentTotal, capGlobal);
-                totalCalculated = coverage;
-                details.push({ name: 'Cobertura Global', amount: coverage, reason: `Tope Global $${capGlobal}` });
-            }
-
-            // Also, logic says "Si no aplicó P1 ni P2, usar porcentajes".
-            // My code applied P1 OR P3 (Percentage) at item level.
-            // Let's align strictly:
-            // Loop Items:
-            //   Check P1 (Specific Cap). If hit, use it.
-            //   If miss P1, continue.
-            // After Loop: 
-            //   If total > 0, we used P1/P3 (mixed?).
-            //   If total == 0 AND Global Cap > 0 -> Use Global Cap.
-            //   If total == 0 AND Global Cap == 0 -> We might have used P3 in loop?
-
-            // Re-reading T3:
-            // "Iterar sobre los ítems... Prioridad 1... Si es Cristal y existe top... Si es Armazon y existe tope..."
-            // "Prioridad 2 (Global): Si no aplicó la P1 y existe monto... Cobertura = MIN(restante, global)"
-            // "Prioridad 3 (Porcentajes): Si no aplicó P1 ni P2..."
-
-            // This suggests a per-item check? Or per-strategy?
-            // "Iterar sobre los items" suggests P1 is item-based.
-            // But P2 is "Global".
-            // Maybe: Try P1 for all items. If we got something, that's it?
-            // Or can we mix P1 for crystals and P3 for frames?
-            // "Si no aplicó la P1" likely means "For this item" or "For the sale"?
-            // "Cobertura es por íntem".
-            // OK, so for EACH ITEM:
-            //   Check P1. If hit, sum.
-            //   If miss P1, check P2 (Global?? No, global is global).
-            //   Maybe Global is "If NO specific caps exist for ANY item, use Global Cap for whole sale"?
-
-            // Let's implement:
-            // 1. Calculate P1 for all items.
-            // 2. If Sum P1 > 0, use P1 result.
-            // 3. If Sum P1 == 0:
-            //    Check P2 (Global). If > 0, use MIN(total, Global).
-            //    If P2 == 0:
-            //       Calculate P3 (Percentages) for all items.
-
-            // Corrected Implementation based on this interpretation:
-
-            // Pass 1: Item Specific Caps
             let sumP1 = 0;
             const detailsP1: any[] = [];
             let p1Applied = false;
 
-            saleItems.forEach(item => {
+            // Pass 1: Item Specific Caps
+            sortedItems.forEach(item => {
                 const name = item.producto.nombre.toLowerCase();
-                const isCristal = name.includes('cristal') || name.includes('lente');
-                const isArmazon = name.includes('armazon') || name.includes('montura');
-                const price = item.producto.precio_venta * item.cantidad;
+                // Backend adds "Armazón " prefix
+                const isCristal = name.includes('cristal') || name.includes('lente') || item.producto.nombre.includes('Cristal');
+                const isArmazon = name.includes('armazon') || name.includes('armazón') || name.includes('montura');
+
+                const unitPrice = item.producto.precio_venta;
+                const lineTotal = unitPrice * item.cantidad;
+                let cov = 0;
 
                 if (isCristal && capCristal > 0) {
-                    const cov = Math.min(price, capCristal * item.cantidad);
-                    sumP1 += cov;
-                    detailsP1.push({ name: item.producto.nombre, amount: cov, reason: 'Tope Cristal' });
-                    p1Applied = true;
+                    cov = Math.min(lineTotal, capCristal * item.cantidad);
+                    if (cov > 0) {
+                        sumP1 += cov;
+                        detailsP1.push({ name: item.producto.nombre, amount: cov, reason: `Tope Cristal ($${capCristal}/u)` });
+                        p1Applied = true;
+                    }
                 } else if (isArmazon && capArmazon > 0) {
-                    const cov = Math.min(price, capArmazon * item.cantidad);
-                    sumP1 += cov;
-                    detailsP1.push({ name: item.producto.nombre, amount: cov, reason: 'Tope Armazón' });
-                    p1Applied = true;
+                    if (armazonesCubiertos < MAX_ARMAZONES) {
+                        // Cover 1 UNIT only as per limit rule
+                        cov = Math.min(unitPrice, capArmazon); // Limit to single unit price
+
+                        sumP1 += cov;
+                        detailsP1.push({ name: item.producto.nombre, amount: cov, reason: `Tope Armazón ($${capArmazon})` });
+
+                        armazonesCubiertos++;
+                        p1Applied = true;
+                    } else {
+                        detailsP1.push({ name: item.producto.nombre, amount: 0, reason: 'Límite: 1 por venta' });
+                    }
                 }
             });
 
@@ -333,14 +249,14 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
                 // Pass 2: Global Cap
                 if (capGlobal > 0) {
                     totalCalculated = Math.min(currentTotal, capGlobal);
-                    details.push({ name: 'Global', amount: totalCalculated, reason: 'Tope Global' });
+                    details.push({ name: 'Cobertura Global', amount: totalCalculated, reason: `Tope Global $${capGlobal}` });
                 } else {
                     // Pass 3: Percentages
-                    saleItems.forEach(item => {
+                    sortedItems.forEach(item => {
                         const name = item.producto.nombre.toLowerCase();
                         const price = item.producto.precio_venta * item.cantidad;
                         const isCristal = name.includes('cristal') || name.includes('lente');
-                        const isArmazon = name.includes('armazon') || name.includes('montura');
+                        const isArmazon = name.includes('armazon') || name.includes('montura') || name.includes('armazón');
 
                         let cov = 0;
                         if (isCristal && pctCristal > 0) {
@@ -364,8 +280,8 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
         } else {
             // Reset if not OS
             setCoverageDetails({ totalCoverage: 0, itemsDetail: [] });
-            if (selectedMethod !== 'MP') { // MP handles its own?
-                // Don't reset amountInput blindly if user is typing, but here we changed method.
+            if (selectedMethod === 'OBRA_SOCIAL') { // If we are here but no ID selected?
+                setAmountInput('');
             }
         }
     }, [selectedObraSocialId, selectedMethod, obrasSociales, currentTotal, saleItems]);
@@ -400,7 +316,6 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
                 // Ajustamos para manejar si result es un objeto directo o tiene .rows
                 const sale = data.result.saleObj || (data.result.rows ? data.result.rows[0] : data.result);
 
-                console.log("🔍 DEBUG FETCH SALE:", sale);
                 if (sale) {
 
                     // Forzamos el parseo a número para evitar errores de concatenación de strings
