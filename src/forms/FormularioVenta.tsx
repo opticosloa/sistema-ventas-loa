@@ -5,7 +5,7 @@ import { valOrNull, cleanSection } from "./helpers/ventaHelpers";
 import { useNavigate } from "react-router-dom";
 import type { FormValues } from "../types/ventasFormTypes";
 import { useForm, useAuthStore } from "../hooks";
-import { validatePrescriptionForm } from "../helpers";
+import { validatePrescriptionForm, formatDateForInput } from "../helpers";
 import LOAApi from "../api/LOAApi";
 import type { Cliente } from "../types/Cliente";
 
@@ -19,12 +19,28 @@ import { SalesItemsList, type CartItem } from "./components/SalesItemsList";
 import { SupervisorAuthModal } from "../components/modals/SupervisorAuthModal";
 import { PrescriptionCapture } from "./components/PrescriptionCapture";
 
+interface VentaBackup {
+  timestamp: number;
+  formState: FormValues;
+  cart: CartItem[];
+  opticItems: any;
+  cliente: Cliente | null;
+  extraPrice: number;
+  discount: number;
+  selectedObraSocialId: string;
+  activeTab: 'optica' | 'retail';
+}
 const initialForm: FormValues = {
   clienteName: "",
   clienteApellido: "",
   clienteDomicilio: "",
   clienteFechaRecibido: new Date().toISOString().slice(0, 16),
-  clienteFechaEntrega: new Date().toISOString().slice(0, 10),
+  clienteFechaEntrega: (() => {
+    const now = new Date();
+    // Adjust to local time before ISO string
+    const local = new Date(now.getTime() - (now.getTimezoneOffset() * 60000));
+    return local.toISOString().split('T')[0];
+  })(),
   clienteTelefono: "",
   clienteDNI: "",
   clienteNameVendedor: "",
@@ -136,6 +152,98 @@ export const FormularioVenta: React.FC = () => {
     cerca_OI: { id: null, price: 0 },
   });
 
+  // --- AUTO-SAVE LOGIC ---
+
+  const clearVentaBackup = () => {
+    try {
+      localStorage.removeItem('venta_backup');
+    } catch (e) {
+      console.error("Error clearing backup:", e);
+    }
+  };
+
+  // 1. Persistence Effect
+  useEffect(() => {
+    // Debounce to avoid excessive writes
+    const timer = setTimeout(() => {
+      try {
+        // Basic check to see if there is meaningful data to save
+        const hasData = cart.length > 0 ||
+          cliente !== null ||
+          (opticItems.lejos_OD.id !== null) || // Check some key optic items
+          formState.clienteName !== "" ||
+          formState.clienteDNI !== "";
+
+        if (hasData) {
+          const backup: VentaBackup = {
+            timestamp: Date.now(),
+            formState,
+            cart,
+            opticItems,
+            cliente,
+            extraPrice,
+            discount,
+            selectedObraSocialId,
+            activeTab
+          };
+          localStorage.setItem('venta_backup', JSON.stringify(backup));
+        } else {
+          // If empty, ensure no backup exists (cleanup effectively)
+          localStorage.removeItem('venta_backup');
+        }
+      } catch (e) {
+        console.error("Error saving backup:", e);
+      }
+    }, 1000); // 1s delay
+
+    return () => clearTimeout(timer);
+  }, [formState, cart, opticItems, cliente, extraPrice, discount, selectedObraSocialId, activeTab]);
+
+  // 2. Recovery Effect
+  useEffect(() => {
+    const restoreSession = () => {
+      try {
+        const stored = localStorage.getItem('venta_backup');
+        if (!stored) return;
+
+        const backup: VentaBackup = JSON.parse(stored);
+        const now = Date.now();
+        const diff = now - (backup.timestamp || 0);
+
+        // 3 Minutes Limit (180000 ms)
+        if (diff < 180000) {
+          // Restore Data
+          handleBulkUpdate(backup.formState);
+          setCart(backup.cart || []);
+          setOpticItems(backup.opticItems);
+          setCliente(backup.cliente);
+          setExtraPrice(backup.extraPrice || 0);
+          setDiscount(backup.discount || 0);
+          setSelectedObraSocialId(backup.selectedObraSocialId || "");
+          if (backup.activeTab) setActiveTab(backup.activeTab);
+
+          // Toast Notification
+          Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: 'info',
+            title: 'Se han recuperado datos de una sesión anterior (expira en 3 min)',
+            showConfirmButton: false,
+            timer: 4000
+          });
+        } else {
+          // Expired
+          localStorage.removeItem('venta_backup');
+        }
+      } catch (e) {
+        console.error("Error restoring session:", e);
+        localStorage.removeItem('venta_backup'); // Clear if corrupt
+      }
+    };
+
+    restoreSession();
+  }, []); // Run once on mount
+
   // --- DESTRUCTURING RESTORED ---
   const {
     clienteName,
@@ -144,6 +252,7 @@ export const FormularioVenta: React.FC = () => {
     clienteFechaRecibido,
     clienteTelefono,
     clienteDNI,
+    clienteFechaEntrega,
     doctorMatricula,
     lejos_OD_Esf,
     lejos_OD_Cil,
@@ -863,6 +972,7 @@ export const FormularioVenta: React.FC = () => {
           doctor_id: valOrNull((formState as any).doctor_id) || null,
           matricula: valOrNull(doctorMatricula),
           fecha: clienteFechaRecibido ? clienteFechaRecibido.split('T')[0] : null,
+          fecha_entrega: clienteFechaEntrega ? formatDateForInput(clienteFechaEntrega) : null,
           lejos: cleanSection(lejos),
           cerca: cleanSection(cerca),
           multifocal: (multifocal.tipo && multifocal.tipo !== "") ? multifocal : {},
@@ -917,9 +1027,11 @@ export const FormularioVenta: React.FC = () => {
       if (isBudget) {
         await LOAApi.put(`/api/sales/${ventaId}/budget`);
         Swal.fire('Guardado', "Presupuesto guardado correctamente.", 'success');
+        clearVentaBackup(); // Clean up
         navigate('/ventas');
       } else {
         // Navigate directly to payment, bypassing auto-print
+        clearVentaBackup(); // Clean up
         navigate('pago', {
           state: {
             ventaId: ventaId,
@@ -1021,6 +1133,7 @@ export const FormularioVenta: React.FC = () => {
 
   const handleResetWrapped = () => {
     setLastRecipeDate(null);
+    clearVentaBackup();
     onResetForm();
   };
 

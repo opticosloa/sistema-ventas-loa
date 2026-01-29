@@ -2,6 +2,11 @@
 export const formatDateForInput = (dateString: string | Date | null | undefined, includeTime: boolean = false): string => {
     if (!dateString) return "";
 
+    // Bypass for YYYY-MM-DD string to avoid timezone shifts
+    if (typeof dateString === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateString) && !includeTime) {
+        return dateString;
+    }
+
     let date: Date;
 
     // Handle DD/MM/YYYY format (common in Argentina DNI)

@@ -295,8 +295,9 @@ export const ClientForm: React.FC<ClientFormProps> = ({
                     <input
                         type="date"
                         name="clienteFechaEntrega"
-                        value={clienteFechaEntrega}
+                        value={formatDateForInput(clienteFechaEntrega)}
                         onChange={onInputChange}
+                        min={new Date().toISOString().split('T')[0]}
                         className="input"
                     />
                 </label>
