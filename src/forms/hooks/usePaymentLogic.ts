@@ -6,6 +6,7 @@ import type { MetodoPago, PagoParcial } from '../../types/Pago';
 import type { CartItem } from '../components/SalesItemsList';
 import { useAppSelector } from '../../hooks';
 import type { ObraSocial } from '../../types/ObraSocial';
+import { useBranch } from '../../context/BranchContext';
 
 export interface UsePaymentLogicReturn {
     ventaId: string | number | null;
@@ -124,10 +125,16 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
     const [pointDevices, setPointDevices] = useState<any[]>([]);
     const [selectedDeviceId, setSelectedDeviceId] = useState<string>("");
 
+    const { currentBranch } = useBranch();
+
     useEffect(() => {
         const fetchDevices = async () => {
+            // Si no hay branch seleccionado, no podemos buscar dispositivos específicos
+            if (!currentBranch?.sucursal_id) return;
+
             try {
-                const { data } = await LOAApi.get('/api/payments/mercadopago/devices');
+                // Pass sucursal_id to get specific devices
+                const { data } = await LOAApi.get(`/api/payments/mercadopago/devices?sucursal_id=${currentBranch.sucursal_id}`);
                 if (data.success && Array.isArray(data.result)) {
                     setPointDevices(data.result);
                     // Opcional: pre-seleccionar el primero si existe
@@ -140,7 +147,7 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
             }
         };
         fetchDevices();
-    }, []);
+    }, [currentBranch?.sucursal_id]);
 
     // Fetch Obras Sociales
     const [obrasSociales, setObrasSociales] = useState<ObraSocial[]>([]);
@@ -798,9 +805,10 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
         // processStartTime.current = Date.now(); // REMOVED
         try {
             const { data } = await LOAApi.post('/api/payments/mercadopago/dynamic', {
-                total: amount,
-                sucursal_id: 'SUCURSAL_DEFAULT',
-                venta_id: ventaId
+                venta_id: ventaId,
+                amount: amount,
+                type: 'QR', // Changed from 'POINT' to 'QR' based on context
+                sucursal_id: 'SUCURSAL_DEFAULT' // Kept existing sucursal_id
             });
 
             if (data.success && data.result?.qr_data) {

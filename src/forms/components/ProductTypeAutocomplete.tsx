@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import LOAApi from '../../api/LOAApi';
+import { useBranch } from '../../context/BranchContext';
 
 interface Product {
     producto_id?: string;
@@ -37,16 +38,19 @@ export const ProductTypeAutocomplete: React.FC<ProductTypeAutocompleteProps> = (
     const [products, setProducts] = useState<Product[]>([]);
     const [loading, setLoading] = useState(false);
     const [showSuggestions, setShowSuggestions] = useState(false);
+    const { currentBranch } = useBranch();
 
     // Fetch products by type on mount
     useEffect(() => {
         const fetchProducts = async () => {
             setLoading(true);
             try {
-                const { data } = await LOAApi.get(`/api/products/type/${type}`);
-                if (data.success && Array.isArray(data.result)) {
-                    setProducts(data.result);
-                }
+                const params = currentBranch?.sucursal_id
+                    ? `?tipo=${type}&sucursal_id=${currentBranch.sucursal_id}`
+                    : `?tipo=${type}`;
+                const { data } = await LOAApi.get(`/api/products${params}`); // Switch to general endpoint
+                const result = Array.isArray(data.result) ? data.result : (data.result?.rows || []);
+                setProducts(result);
             } catch (error) {
                 console.error(`Error fetching products of type ${type}`, error);
             } finally {
@@ -55,7 +59,7 @@ export const ProductTypeAutocomplete: React.FC<ProductTypeAutocompleteProps> = (
         };
 
         fetchProducts();
-    }, [type]);
+    }, [type, currentBranch?.sucursal_id]);
 
     // Filter products based on current input value
     const filteredProducts = useMemo(() => {

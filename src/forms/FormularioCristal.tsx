@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { createBatchCristales } from '../services';
 import { getMaterials, getTreatments, type CrystalMaterial, type CrystalTreatment } from '../services/crystals.api';
-import { FormularioMultifocal } from '../ventas/components/FormularioMultifocal';
 import Swal from 'sweetalert2';
+import { useBranch } from '../context/BranchContext';
+import { FormularioMultifocal } from '.';
 
 // Cambiamos los tipos a string para permitir estados intermedios como "-" o ""
 interface BatchForm {
@@ -44,6 +45,24 @@ export const FormularioCristal: React.FC = () => {
     const [materials, setMaterials] = useState<CrystalMaterial[]>([]);
     const [treatments, setTreatments] = useState<CrystalTreatment[]>([]);
     const [isManualPrice, setIsManualPrice] = useState(false);
+
+    // Multi-Branch Stock
+    const { branches, refreshBranches } = useBranch();
+    const [stockDistribution, setStockDistribution] = useState<Record<string, number>>({});
+    const [selectedBranches, setSelectedBranches] = useState<Record<string, boolean>>({});
+
+    useEffect(() => {
+        if (branches.length === 0) refreshBranches();
+    }, [branches.length, refreshBranches]);
+
+    const toggleBranch = (branchId: string) => {
+        setSelectedBranches(prev => ({ ...prev, [branchId]: !prev[branchId] }));
+    };
+
+    const handleBranchStockChange = (branchId: string, value: string) => {
+        const qty = parseInt(value) || 0;
+        setStockDistribution(prev => ({ ...prev, [branchId]: qty }));
+    };
 
     useEffect(() => {
         const loadSettings = async () => {
@@ -124,6 +143,15 @@ export const FormularioCristal: React.FC = () => {
         if (stockInitial <= 0) return Swal.fire('Error', 'El Stock Inicial debe ser mayor a 0', 'error');
         if (precioUsd <= 0) return Swal.fire('Error', 'El Precio de Venta (USD) debe ser mayor a 0', 'error');
 
+        // Prepare Stock Distribution map for backend
+        const distributionData = Object.entries(selectedBranches)
+            .filter(([_, isSelected]) => isSelected)
+            .map(([branchId, _]) => ({
+                sucursal_id: branchId,
+                cantidad: stockDistribution[branchId] || 0
+            }))
+            .filter(item => item.cantidad > 0);
+
         const finalPayload = {
             material: form.material,
             tratamiento: form.tratamiento,
@@ -133,7 +161,8 @@ export const FormularioCristal: React.FC = () => {
             cilindro_max: cilMax,
             precio_usd: precioUsd,
             precio_costo: parseFloat(form.precio_costo) || 0,
-            stock_inicial: stockInitial,
+            stock_inicial: 0, // Legacy/Global param, sending 0 as we use specific distribution
+            stock_distribution: distributionData, // New field for multi-branch
             stock_minimo: parseInt(form.stock_minimo) || 2,
             ubicacion: form.ubicacion
         };
@@ -167,19 +196,19 @@ export const FormularioCristal: React.FC = () => {
             <div className="flex gap-2 mb-6 border-b border-white/10 pb-1">
                 <button
                     onClick={() => setActiveTab('monofocal')}
-                    className={`px-6 py-2 rounded-t-lg font-medium transition-all ${activeTab === 'monofocal'
+                    className={`px - 6 py - 2 rounded - t - lg font - medium transition - all ${activeTab === 'monofocal'
                         ? 'bg-cyan-600 text-white shadow-lg translate-y-[1px]'
                         : 'text-slate-400 hover:text-white hover:bg-white/5'
-                        }`}
+                        } `}
                 >
                     Stock Monofocal
                 </button>
                 <button
                     onClick={() => setActiveTab('multifocal')}
-                    className={`px-6 py-2 rounded-t-lg font-medium transition-all ${activeTab === 'multifocal'
+                    className={`px - 6 py - 2 rounded - t - lg font - medium transition - all ${activeTab === 'multifocal'
                         ? 'bg-cyan-600 text-white shadow-lg translate-y-[1px]'
                         : 'text-slate-400 hover:text-white hover:bg-white/5'
-                        }`}
+                        } `}
                 >
                     Nuevo Multifocal
                 </button>
@@ -211,15 +240,15 @@ export const FormularioCristal: React.FC = () => {
                             </div>
                             <div>
                                 <label className="block text-sm text-gray-400 mb-2 font-bold text-yellow-400">Precio Costo (USD)</label>
-                                <input type="number" step="0.01" required name="precio_costo" value={form.precio_costo} onChange={handleChange} className={`${inputClass} border-yellow-500/30 text-lg`} />
+                                <input type="number" step="0.01" required name="precio_costo" value={form.precio_costo} onChange={handleChange} className={`${inputClass} border - yellow - 500 / 30 text - lg`} />
                             </div>
                             <div>
                                 <label className="block text-sm text-gray-200 mb-2 font-bold text-blue-400">Margen de ganancia (%)</label>
-                                <input type="number" step="0.01" required name="porcentaje_ganancia" value={form.porcentaje_ganancia} onChange={handleChange} className={`${inputClass} border-blue-500/30 text-lg`} />
+                                <input type="number" step="0.01" required name="porcentaje_ganancia" value={form.porcentaje_ganancia} onChange={handleChange} className={`${inputClass} border - blue - 500 / 30 text - lg`} />
                             </div>
                             <div>
                                 <label className="block text-sm text-gray-400 mb-2 font-bold text-green-400">Precio Venta (USD)</label>
-                                <input type="number" step="0.01" required name="precio_usd" value={form.precio_usd} onChange={handleChange} className={`${inputClass} border-green-500/30 text-lg`} />
+                                <input type="number" step="0.01" required name="precio_usd" value={form.precio_usd} onChange={handleChange} className={`${inputClass} border - green - 500 / 30 text - lg`} />
                             </div>
                         </div>
                     </section>
@@ -260,20 +289,52 @@ export const FormularioCristal: React.FC = () => {
                     </section>
 
                     {/* STOCK Y RESUMEN */}
-                    <section className="border border-white rounded-xl p-6 shadow-xl flex flex-col md:flex-row items-center justify-between gap-6">
-                        <div className="w-full md:w-1/3">
-                            <label className="block text-sm text-blanco mb-2 font-bold">Stock Inicial por Graduación</label>
-                            <input type="number" name="stock_inicial" value={form.stock_inicial} onChange={handleChange} className={inputClass} />
-                            <p className="text-xs text-crema mt-1">Cantidad a agregar en cada combinación.</p>
-                        </div>
-                        <div className="w-full md:w-1/3">
-                            <label className="block text-sm text-blanco mb-2 font-bold">Stock Mínimo</label>
-                            <input type="number" name="stock_minimo" value={form.stock_minimo} onChange={handleChange} className={inputClass} />
-                            <p className="text-xs text-crema mt-1">Alerta cuando baje de este número.</p>
-                        </div>
-                        <div className="w-full md:w-1/3">
-                            <label className="block text-sm text-blanco mb-2 font-bold">Ubicación</label>
-                            <input type="text" name="ubicacion" value={form.ubicacion} onChange={handleChange} placeholder="Ej: Cajón A3" className={inputClass} />
+                    <section className="border border-white rounded-xl p-6 shadow-xl flex flex-col gap-6">
+                        <div className="flex flex-col md:flex-row gap-6">
+                            <div className="flex-1 bg-slate-900/30 p-4 rounded-lg border border-white/20">
+                                <label className="block text-sm text-blanco mb-3 font-bold border-b border-white/10 pb-2">Distribución de Stock Inicial</label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-48 overflow-y-auto custom-scrollbar">
+                                    {branches.map(branch => {
+                                        const isSelected = selectedBranches[branch.sucursal_id!] || false;
+                                        return (
+                                            <div key={branch.sucursal_id} className={`flex items - center gap - 2 p - 2 rounded border transition - colors ${isSelected ? 'bg-cyan-900/40 border-cyan-500/50' : 'bg-slate-800/40 border-slate-600'} `}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isSelected}
+                                                    onChange={() => toggleBranch(branch.sucursal_id!)}
+                                                    className="w-4 h-4 accent-cyan-500"
+                                                />
+                                                <div className="flex-1 truncate">
+                                                    <span className="text-xs text-white" title={branch.nombre}>{branch.nombre}</span>
+                                                </div>
+                                                {isSelected && (
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        value={stockDistribution[branch.sucursal_id!] || 0}
+                                                        onChange={(e) => handleBranchStockChange(branch.sucursal_id!, e.target.value)}
+                                                        className="w-16 bg-slate-700 border border-slate-500 rounded px-1 text-center text-xs text-white focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                                                        placeholder="Cant."
+                                                    />
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                                <p className="text-xs text-gray-400 mt-2">Se sumará al stock existente si ya existe la combinación.</p>
+                            </div>
+
+                            <div className="w-full md:w-1/3 flex flex-col gap-4">
+                                <div>
+                                    <label className="block text-sm text-blanco mb-2 font-bold">Stock Mínimo</label>
+                                    <input type="number" name="stock_minimo" value={form.stock_minimo} onChange={handleChange} className={inputClass} />
+                                    <p className="text-xs text-crema mt-1">Alerta cuando baje de este número.</p>
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-blanco mb-2 font-bold">Ubicación</label>
+                                    <input type="text" name="ubicacion" value={form.ubicacion} onChange={handleChange} placeholder="Ej: Cajón A3" className={inputClass} />
+                                </div>
+                            </div>
                         </div>
                     </section>
 

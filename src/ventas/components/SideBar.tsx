@@ -13,12 +13,25 @@ export const SideBar = () => {
   const { uid, role, nombre, apellido } = useAppSelector((state: any) => state.auth);
   const [showProfileModal, setShowProfileModal] = useState(false);
 
-  const handlerLogout = async () => {
-    if (uid) {
-      await dispatch(startLogout());
+  const handlerLogout = async (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
     }
-    toggleSideBar();
-    navigate('/login');
+
+    try {
+      toggleSideBar(); // Close immediately for UI feedback
+
+      if (uid) {
+        await dispatch(startLogout());
+      }
+
+      navigate('/login', { replace: true });
+    } catch (error) {
+      console.error("Error during logout:", error);
+      // Fallback
+      navigate('/login', { replace: true });
+    }
   };
 
   // Filter and group navigation items
@@ -135,6 +148,7 @@ export const SideBar = () => {
           </button>
 
           <button
+            type="button"
             className="w-full text-left px-4 py-3 rounded-lg hover:bg-red-500/10 text-red-300 hover:text-red-200 transition-colors flex items-center gap-3 group"
             onClick={handlerLogout}
           >

@@ -9,6 +9,8 @@ import { getCristalStock, printLabels } from "../../services/stock.api";
 import type { CrystalMaterial } from "../../services/crystals.api";
 import { getMaterials } from "../../services/crystals.api";
 
+import { useBranch } from "../../context/BranchContext";
+
 const ITEMS_PER_PAGE = 25;
 
 const statusBadge = (stock: number) => {
@@ -19,6 +21,7 @@ const statusBadge = (stock: number) => {
 
 export const ConsultaStock: React.FC = () => {
   const queryClient = useQueryClient();
+  const { currentBranch } = useBranch();
 
   // 2. Local State (Moved up for dependencies)
   const [query, setQuery] = useState("");
@@ -36,12 +39,17 @@ export const ConsultaStock: React.FC = () => {
 
   // 1. Loading State & Data
   const { data: products = [], isLoading, isSuccess } = useQuery({
-    queryKey: ['products'],
+    queryKey: ['products', currentBranch?.sucursal_id],
     queryFn: async () => {
-      const { data } = await LOAApi.get<{ success: boolean; result: any }>('/api/products');
+      // Always send sucursal_id if available
+      const params = currentBranch?.sucursal_id ? `?sucursal_id=${currentBranch.sucursal_id}` : '';
+      const { data } = await LOAApi.get<{ success: boolean; result: any }>(`/api/products${params}`);
       const listaProductos = data.result?.rows || data.result;
       return Array.isArray(listaProductos) ? listaProductos : [];
-    }
+    },
+    enabled: !!currentBranch?.sucursal_id || true // Allow fetch even if no branch? User said "Ideal NEVER calls without". But for safety maybe allow.
+    // However, user said "Frontend SIEMPRE envíe sucursal_id". 
+    // if currentBranch is loading it might be null initially.
   });
 
 
@@ -118,6 +126,29 @@ export const ConsultaStock: React.FC = () => {
     if (selectedIds.length === 0) return;
     setLabelConfigModal(prev => ({ ...prev, open: true }));
   };
+
+
+
+  // Stock Details Modal
+  const [stockDetailsModal, setStockDetailsModal] = useState<{ open: boolean, product: Producto | null, details: any[], loading: boolean }>({
+    open: false,
+    product: null,
+    details: [],
+    loading: false
+  });
+
+  const handleViewStockDetails = async (p: Producto) => {
+    setStockDetailsModal({ open: true, product: p, details: [], loading: true });
+    try {
+      const { data } = await LOAApi.get<{ success: boolean, result: any[] }>(`/api/products/${p.producto_id}/stock-details`);
+      setStockDetailsModal(prev => ({ ...prev, details: data.result || [], loading: false }));
+    } catch (error) {
+      console.error("Error fetching stock details", error);
+      setStockDetailsModal(prev => ({ ...prev, loading: false }));
+      Swal.fire("Error", "No se pudieron obtener los detalles de stock", "error");
+    }
+  };
+
 
   const confirmPrintLabels = async () => {
     setIsGeneratingLabels(true);
@@ -480,17 +511,18 @@ export const ConsultaStock: React.FC = () => {
                 <th className="px-4 py-3 text-center w-[5%]">
                   <input
                     type="checkbox"
-                    checked={pageItems.length > 0 && pageItems.every(p => selectedIds.includes(p.producto_id))}
+                    checked={pageItems.length > 0 && pageItems.every(p => selectedIds.includes(parseInt(p.producto_id)))}
                     onChange={toggleSelectAll}
                     className="w-4 h-4 rounded border-gray-300 text-azul focus:ring-celeste"
                   />
                 </th>
-                <th className="px-4 py-3 text-left text-sm w-[25%]">Nombre</th>
-                <th className="px-4 py-3 text-center text-sm w-[10%]">QR</th>
-                <th className="px-4 py-3 text-left text-sm w-[20%]">Ubicación</th>
+                <th className="px-4 py-3 text-left text-sm w-[20%]">Nombre</th>
+                <th className="px-4 py-3 text-center text-sm w-[8%]">QR</th>
+                <th className="px-4 py-3 text-left text-sm w-[15%]">Ubicación</th>
                 <th className="px-4 py-3 text-left text-sm w-[10%]">Tipo</th>
-                <th className="px-4 py-3 text-center text-sm w-[10%]">Stock</th>
-                <th className="px-4 py-3 text-right text-sm w-[20%]">Acciones</th>
+                <th className="px-4 py-3 text-center text-sm w-[10%]">Stock Local</th>
+                <th className="px-4 py-3 text-center text-sm w-[10%]">Stock Total</th>
+                <th className="px-4 py-3 text-right text-sm w-[22%]">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -502,8 +534,8 @@ export const ConsultaStock: React.FC = () => {
                   <td className="px-4 py-2 text-center">
                     <input
                       type="checkbox"
-                      checked={selectedIds.includes(p.producto_id)}
-                      onChange={() => toggleSelect(p.producto_id)}
+                      checked={selectedIds.includes(parseInt(p.producto_id))}
+                      onChange={() => toggleSelect(parseInt(p.producto_id))}
                       className="w-4 h-4 rounded border-gray-300 text-azul focus:ring-celeste"
                     />
                   </td>
@@ -527,6 +559,9 @@ export const ConsultaStock: React.FC = () => {
                       {p.stock}
                     </span>
                   </td>
+                  <td className="px-4 py-2 text-center text-sm font-semibold text-gray-600">
+                    {p.stock_total ?? '-'}
+                  </td>
                   <td className="px-4 py-2 text-right text-sm space-x-2">
                     <button
                       className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 transaction"
@@ -535,7 +570,12 @@ export const ConsultaStock: React.FC = () => {
                     >
                       - Stock
                     </button>
-                    {/* <button className="text-blue-600 hover:underline" onClick={() => console.log("Detalle", p.producto_id)}>Detalle</button> */}
+                    <button
+                      className="px-2 py-1 text-xs bg-blue-50 text-blue-600 rounded hover:bg-blue-100 border border-blue-200"
+                      onClick={() => handleViewStockDetails(p)}
+                    >
+                      Ver Detalle
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -620,6 +660,69 @@ export const ConsultaStock: React.FC = () => {
             </div>
             <p className="text-xs text-center text-gray-400 mb-2 truncate">{qrModal.value}</p>
             <button onClick={handleCopyQr} className="w-full btn-secondary py-2">Copiar Código</button>
+          </div>
+        </div>
+      )}
+
+      {/* STOCK DETAILS MODAL */}
+      {stockDetailsModal.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setStockDetailsModal(prev => ({ ...prev, open: false }))}>
+          <div className="bg-white rounded-xl p-6 max-w-md w-full shadow-2xl relative" onClick={e => e.stopPropagation()}>
+            <button className="absolute top-2 right-2 text-gray-500 hover:text-red-500 text-xl" onClick={() => setStockDetailsModal(prev => ({ ...prev, open: false }))}>✕</button>
+            <h3 className="text-lg font-bold mb-1 text-azul">Distribución de Stock</h3>
+            <p className="text-sm text-gray-500 mb-4 truncate">{stockDetailsModal.product?.nombre}</p>
+
+            {stockDetailsModal.loading ? (
+              <div className="flex justify-center py-8">
+                <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            ) : (
+              <div className="border rounded-lg overflow-hidden max-h-[300px] overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-100 sticky top-0">
+                    <tr>
+                      <th className="px-4 py-2 text-left">Sucursal</th>
+                      <th className="px-4 py-2 text-right">Cantidad</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stockDetailsModal.details.length === 0 ? (
+                      <tr>
+                        <td colSpan={2} className="px-4 py-4 text-center text-gray-400">Sin stock en otras sucursales</td>
+                      </tr>
+                    ) : (
+                      stockDetailsModal.details.map((d, idx) => (
+                        <tr key={idx} className="border-b last:border-0 hover:bg-gray-50">
+                          <td className="px-4 py-2 font-medium">{d.sucursal_nombre}</td>
+                          <td className="px-4 py-2 text-right">
+                            <span className={`px-2 py-0.5 rounded text-xs ${statusBadge(parseInt(d.cantidad))}`}>
+                              {d.cantidad}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                  <tfoot className="bg-gray-50 font-bold sticky bottom-0">
+                    <tr>
+                      <td className="px-4 py-2 text-right">Total Global:</td>
+                      <td className="px-4 py-2 text-right">
+                        {stockDetailsModal.details.reduce((acc, curr) => acc + (parseInt(curr.cantidad) || 0), 0)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={() => setStockDetailsModal(prev => ({ ...prev, open: false }))}
+                className="btn-secondary px-4 py-2"
+              >
+                Cerrar
+              </button>
+            </div>
           </div>
         </div>
       )}

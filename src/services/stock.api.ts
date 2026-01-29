@@ -13,6 +13,7 @@ interface BatchCrystalPayload {
     stock_inicial: number;
     stock_minimo: number;
     ubicacion: string;
+    stock_distribution?: { sucursal_id: string; cantidad: number }[];
 }
 
 

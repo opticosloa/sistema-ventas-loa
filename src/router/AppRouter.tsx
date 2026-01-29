@@ -1,5 +1,5 @@
 import { Routes, Route } from 'react-router-dom';
-import { Navbar, ConsultaStock, ConsultaCliente, TicketList, TicketsHistorial, Estadisticas, ListaEmpleados, Home, ListaTicketsTaller, ConfiguracionPage, CierreCajaPage, ListaMarcas, ListaProveedores, ListaObrasSociales, DoctorManagementPage, BulkProductImporter } from '../ventas/components';
+import { Navbar, ConsultaStock, ConsultaCliente, TicketList, TicketsHistorial, Estadisticas, ListaEmpleados, Home, ListaTicketsTaller, ConfiguracionPage, CierreCajaPage, ListaMarcas, ListaProveedores, ListaObrasSociales, DoctorManagementPage, BulkProductImporter, ListaSucursales } from '../ventas/components';
 import { LoginPage, NotFoundPage, PagoResultadoPage, UnAuthorized, DevolucionesPage } from '../ventas/page';
 import { HomePage, EmpleadoHomePage, TallerHomePage } from '../page';
 import { AuthGuard, RoleGuard, TenantGuard } from '../auth/guards';
@@ -41,6 +41,7 @@ export const AppRouter = () => {
                 <Route path="configuracion/marcas" element={<ListaMarcas />} />
                 <Route path="configuracion/proveedores" element={<ListaProveedores />} />
                 <Route path="configuracion/obras-sociales" element={<ListaObrasSociales />} />
+                <Route path="configuracion/sucursales" element={<ListaSucursales />} />
                 <Route path="configuracion/doctores" element={<DoctorManagementPage />} />
                 <Route path="cierre-caja" element={<CierreCajaPage />} />
                 {/* <Route path="obras-sociales" element={<AdminObrasSociales />} /> REMOVED */}

@@ -1,5 +1,6 @@
 export * from './BotonEntregarTicket';
 export * from '../../page/admin/CierreCajaPage';
+export * from './ListaSucursales';
 export * from './ConfiguracionPage'
 export * from './ConsultaCliente'
 export * from './ConsultaStock';

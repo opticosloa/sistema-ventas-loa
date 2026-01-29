@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Settings, ChevronDown, Wallet, Building2, Tag, Layers } from 'lucide-react';
+import { Settings, ChevronDown, Wallet, Building2, Tag, Layers, MapPin } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../hooks/useAppDispatch';
 import { startLogout } from '../../store';
 import { Logo } from './Logo';
@@ -9,12 +9,14 @@ import { SideBar } from '.';
 import { useUiStore } from '../../hooks';
 import { ProfileEditModal } from './ProfileEditModal';
 import { BulkPriceUpdateModal } from '../../components/modals/BulkPriceUpdateModal';
-
+import { useBranch } from '../../context/BranchContext';
+import LOAApi from '../../api/LOAApi';
 
 export const Navbar = () => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
-  const { role, nombre, apellido } = useAppSelector((state: any) => state.auth);
+  const { role, nombre, apellido, uid } = useAppSelector((state: any) => state.auth);
+  const { currentBranch, branches, setCurrentBranch } = useBranch();
 
   const { toggleSideBar } = useUiStore();
 
@@ -46,6 +48,31 @@ export const Navbar = () => {
     setShowDropdown(false);
   };
 
+  const handleBranchSelect = async (branchId: string) => {
+    console.log("LOG 5 - Intentando cambiar a ID:", branchId);
+    console.log("LOG 6 - Lista de sucursales disponible:", branches);
+    const branch = branches.find(b => b.sucursal_id === branchId);
+    console.log("LOG 7 - Sucursal encontrada:", branch);
+    console.log(branch);
+    if (branch) {
+      try {
+        if (uid) {
+          await LOAApi.post('/api/tenants/user-branch', {
+            usuario_id: uid,
+            nueva_sucursal_id: branchId
+          });
+        }
+      } catch (e) {
+        console.error("Failed to persist branch change", e);
+      }
+
+      setCurrentBranch(branch);
+      setShowConfigDropdown(false);
+      window.location.reload();
+    }
+  };
+
+
   const navigateHome = () => {
     if (!role) {
       navigate('/login');
@@ -75,12 +102,14 @@ export const Navbar = () => {
         <div
           className="flex items-center justify-between px-4 py-4 max-w-7xl mx-auto"
         >
-          <a
-            className="flex items-center cursor-pointer"
-            onClick={navigateHome}
-          >
-            <Logo />
-          </a>
+          <div className="flex items-center gap-4">
+            <a
+              className="flex items-center cursor-pointer"
+              onClick={navigateHome}
+            >
+              <Logo />
+            </a>
+          </div>
 
           <div className='hidden md:flex items-center gap-6'>
             {
@@ -116,11 +145,49 @@ export const Navbar = () => {
                     </button>
 
                     {showConfigDropdown && (
-                      <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-xl overflow-hidden z-50 animate-fade-in-down border border-gray-100">
-                        <div className="py-1">
+                      <div className="absolute right-0 mt-2 w-72 bg-white rounded-lg shadow-xl overflow-hidden z-50 animate-fade-in-down border border-gray-100">
+                        <div className="py-2">
+                          {/* Branch Display / Switcher inside Dropdown */}
+                          <div className="px-4 py-2 border-b border-gray-100 mb-2">
+                            <p className="text-xs font-bold text-gray-400 uppercase mb-1">Sucursal Actual</p>
+                            <div className="flex items-center gap-2 text-cyan-700 font-medium">
+                              <MapPin size={16} />
+                              <span>{currentBranch?.nombre || 'Desconocida'}</span>
+                            </div>
+                          </div>
+
+                          {role === 'SUPERADMIN' && (
+                            <div className="px-4 pb-2 border-b border-gray-100 mb-2">
+                              <div className="flex justify-between items-center mb-2">
+                                <p className="text-xs font-bold text-gray-400 uppercase">Cambiar a:</p>
+                                <Link to="/admin/configuracion/sucursales" className="text-[10px] text-cyan-600 hover:underline" onClick={() => setShowConfigDropdown(false)}>
+                                  Gestionar
+                                </Link>
+                              </div>
+
+                              {branches.length > 1 ? (
+                                <div className="grid grid-cols-1 gap-1 max-h-[150px] overflow-y-auto custom-scrollbar">
+                                  {branches.filter(b => b.sucursal_id !== currentBranch?.sucursal_id).map(branch => (
+                                    <button
+                                      key={branch.sucursal_id}
+                                      onClick={() => handleBranchSelect(branch.sucursal_id!)}
+                                      className="text-left text-sm text-gray-600 hover:text-cyan-600 hover:bg-cyan-50 px-2 py-1.5 rounded transition-colors flex items-center gap-2 w-full truncate"
+                                      title={branch.nombre}
+                                    >
+                                      <div className="w-1.5 h-1.5 rounded-full bg-gray-300 flex-shrink-0" />
+                                      <span className="truncate">{branch.nombre}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-xs text-gray-400 italic px-2">Solo una sucursal disponible</p>
+                              )}
+                            </div>
+                          )}
+
                           <Link
                             to="/admin/configuracion"
-                            className="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 hover:text-cyan-600 flex items-center gap-3 border-b border-gray-100"
+                            className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-cyan-600 flex items-center gap-3"
                             onClick={() => setShowConfigDropdown(false)}
                           >
                             <Settings size={18} className="text-gray-400" />

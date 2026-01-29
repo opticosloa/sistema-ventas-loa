@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { useAppSelector } from '../../hooks';
 import { ScrollToTopButton } from '../../components/ui/ScrollToTopButton';
+import { useBranch } from '../../context/BranchContext';
 
 
 export const Dashboard = () => {
   const navigate = useNavigate();
   const { nombre, role } = useAppSelector((state) => state.auth);
+  const { currentBranch } = useBranch();
   const [isMenuOpen, setIsMenuOpen] = useState(true);
 
   return (
@@ -14,7 +16,12 @@ export const Dashboard = () => {
       <div className="flex flex-col w-full  px-8 py-6 shadow-lg">
 
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl text-blanco font-semibold text-center">Bienvenido {nombre}</h1>
+          <h1 className="text-3xl text-blanco font-semibold text-center">
+            Bienvenido {nombre}
+            <span className="text-xl ml-3 opacity-90 font-normal border-l pl-3 border-white/40">
+              {currentBranch?.nombre}
+            </span>
+          </h1>
           <button
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             className="text-white bg-white/20 hover:bg-white/30 rounded-full p-2 transition-colors"

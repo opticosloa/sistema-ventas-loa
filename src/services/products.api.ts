@@ -1,8 +1,14 @@
 import LOAApi from '../api/LOAApi';
 import type { Producto } from '../types/Producto';
 
-export const getProducts = async (tipo?: string): Promise<Producto[]> => {
-    const params = tipo ? `?tipo=${tipo}` : '';
+export const getProducts = async (tipo?: string, sucursal_id?: string): Promise<Producto[]> => {
+    let params = '';
+    const queryParts = [];
+    if (tipo) queryParts.push(`tipo=${tipo}`);
+    if (sucursal_id) queryParts.push(`sucursal_id=${sucursal_id}`);
+
+    if (queryParts.length > 0) params = `?${queryParts.join('&')}`;
+
     const { data } = await LOAApi.get(`/api/products${params}`);
     return data.result;
 };

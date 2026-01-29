@@ -18,5 +18,6 @@ export interface Producto {
   updated_at: string;
   is_active: boolean;
   precio_usd: number;
+  stock_total?: number;
 
 };

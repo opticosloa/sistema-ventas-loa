@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuthStore } from '../hooks';
 import Swal from 'sweetalert2';
-import { Search, X, Plus } from 'lucide-react';
+import { Search, X, Plus, Store } from 'lucide-react';
 import { useForm, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -9,6 +9,7 @@ import LOAApi from '../api/LOAApi';
 import type { Brand } from '../types/Marcas';
 import { BrandCreateModal } from './components/modals/BrandCreateModal';
 import { BulkProductImporter } from '../ventas/components/BulkProductImporter/BulkProductImporter';
+import { useBranch } from '../context/BranchContext';
 
 // --- Zod Schema ---
 const productSchema = z.object({
@@ -19,7 +20,7 @@ const productSchema = z.object({
     precio_costo: z.number().optional(),
     precio_usd: z.number().optional(),
     precio_venta_ars: z.number().optional(),
-    stock: z.number().min(0, "El stock es obligatorio"),
+    // Stock removido de aquí, se maneja separado
     stock_minimo: z.number().optional(),
     ubicacion: z.string().optional(),
     is_active: z.boolean(),
@@ -53,7 +54,6 @@ const initialValues: ProductFormData = {
     precio_costo: undefined,
     precio_usd: undefined,
     precio_venta_ars: undefined,
-    stock: 0,
     stock_minimo: 0,
     ubicacion: '',
     is_active: true
@@ -61,6 +61,8 @@ const initialValues: ProductFormData = {
 
 export const FormularioProducto: React.FC = () => {
     const { role } = useAuthStore();
+    const { branches, refreshBranches } = useBranch();
+
     // React Hook Form
     const {
         register,
@@ -85,13 +87,20 @@ export const FormularioProducto: React.FC = () => {
     const [isBrandModalOpen, setIsBrandModalOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
 
+    // Stock Distribution State
+    // Format: { [sucursalId]: quantity }
+    const [stockDistribution, setStockDistribution] = useState<Record<string, number>>({});
+    const [selectedBranches, setSelectedBranches] = useState<Record<string, boolean>>({});
+
+
     // Refs
     const searchTimeout = useRef<any>(null);
     const wrapperRef = useRef<HTMLDivElement>(null);
+    const isSubmittingRef = useRef(false);
 
     // --- Effects ---
 
-    // 1. Fetch Dolar Rate
+    // 1. Fetch Dolar Rate & Ensure Branches
     useEffect(() => {
         const fetchRate = async () => {
             try {
@@ -102,7 +111,12 @@ export const FormularioProducto: React.FC = () => {
             }
         };
         fetchRate();
-    }, []);
+
+        // Ensure branches are loaded
+        if (branches.length === 0) {
+            refreshBranches();
+        }
+    }, [branches.length, refreshBranches]); // Removed branches.length to avoid infinite loop if simple check, but refreshBranches should be stable.
 
     // 2. Close brand dropdown on click outside
     useEffect(() => {
@@ -186,7 +200,27 @@ export const FormularioProducto: React.FC = () => {
         setIsBrandModalOpen(false);
     };
 
+    // Stock Handlers
+    const toggleBranch = (branchId: string) => {
+        setSelectedBranches(prev => ({
+            ...prev,
+            [branchId]: !prev[branchId]
+        }));
+    };
+
+    const handleBranchStockChange = (branchId: string, value: string) => {
+        const qty = parseInt(value) || 0;
+        setStockDistribution(prev => ({
+            ...prev,
+            [branchId]: qty
+        }));
+    };
+
     const onSubmit: SubmitHandler<ProductFormData> = async (data) => {
+        if (isSubmittingRef.current) return;
+
+        // 2. ACTIVAR BLOQUEO
+        isSubmittingRef.current = true;
         setLoading(true);
         try {
             // Determine final USD Price
@@ -216,25 +250,62 @@ export const FormularioProducto: React.FC = () => {
                 marca_id: data.marca_id,
                 precio_costo: data.precio_costo || 0,
                 precio_usd: finalUsd,
-                stock: data.stock,
                 stock_minimo: data.stock_minimo || 0,
                 ubicacion: data.ubicacion,
-                is_active: data.is_active
+                is_active: data.is_active,
+                // Legacy stock field might be required by backend validation if not updated yet? 
+                // We send 0 or total? Sending 0 safe if we distribute separately.
+                stock: 0
             };
 
-            await LOAApi.post('/api/products', payload);
-            Swal.fire("Éxito", 'Producto creado correctamente', "success");
+            const response = await LOAApi.post<any>('/api/products', payload);
+
+            // 2. VERIFICACIÓN DE CONFLICTO (DUPLICADO)
+            if (response.data.conflict) {
+                Swal.fire({
+                    title: "Producto Duplicado",
+                    text: `Ya existe un producto con el nombre "${data.nombre}" y esa marca.`,
+                    icon: "warning"
+                });
+                setLoading(false);
+                return; // Detenemos la ejecución aquí
+            }
+            // 3. EXTRACCIÓN DEL ID (Ahora es seguro)
+            if (!response.data.result || !response.data.result.producto_id) {
+                throw new Error("Respuesta del servidor inválida");
+            }
+            const newProductId = response.data.result.producto_id;
+
+            // 2. Distribute Stock
+            const distributionData = Object.entries(selectedBranches)
+                .filter(([_, isSelected]) => isSelected)
+                .map(([branchId, _]) => ({
+                    sucursal_id: branchId,
+                    cantidad: stockDistribution[branchId] || 0
+                }))
+                .filter(item => item.cantidad > 0);
+
+            if (distributionData.length > 0) {
+                await LOAApi.post(`/api/products/${newProductId}/stock-distribution`, {
+                    stock_data: distributionData
+                });
+            }
+
+            Swal.fire("Éxito", 'Producto creado y stock distribuido correctamente', "success");
 
             // Reset
             reset(initialValues);
             clearBrandSelection();
             setBrandSearchTerm('');
+            setStockDistribution({});
+            setSelectedBranches({});
 
         } catch (error) {
             console.error(error);
             Swal.fire("Error", 'Error al crear producto', "error");
         } finally {
             setLoading(false);
+            isSubmittingRef.current = false;
         }
     };
 
@@ -419,17 +490,42 @@ export const FormularioProducto: React.FC = () => {
                         <p className="text-xs text-gray-400 mt-1">Cotización: {dolarRate > 0 ? `$${dolarRate}` : 'No definida'}</p>
                     </div>
 
-                    {/* Stock */}
-                    <div>
-                        <label className="text-sm text-blanco">Stock Inicial <span className="text-red-500">*</span></label>
-                        <input
-                            type="number"
-                            {...register('stock', { valueAsNumber: true })}
-                            className={`input w-full bg-slate-50 text-slate-900 ${errors.stock ? 'border-red-500' : ''}`}
-                        />
-                        {errors.stock && (
-                            <p className="text-red-500 text-xs mt-1">{errors.stock.message}</p>
-                        )}
+                    {/* Stock Multi-Branch Section */}
+                    <div className="md:col-span-2 bg-slate-800/50 p-4 rounded-lg border border-slate-700 mt-2">
+                        <label className="text-sm text-white font-semibold flex items-center gap-2 mb-3">
+                            <Store size={18} className="text-cyan-400" />
+                            Distribuir Stock Inicial
+                        </label>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {branches.map(branch => {
+                                const isSelected = selectedBranches[branch.sucursal_id!] || false;
+                                return (
+                                    <div key={branch.sucursal_id} className={`flex items-center gap-3 p-3 rounded-lg border transition-colors ${isSelected ? 'bg-cyan-900/20 border-cyan-500/50' : 'bg-slate-900/50 border-slate-700'}`}>
+                                        <input
+                                            type="checkbox"
+                                            checked={isSelected}
+                                            onChange={() => toggleBranch(branch.sucursal_id!)}
+                                            className="w-5 h-5 accent-cyan-500"
+                                        />
+                                        <div className="flex-1">
+                                            <span className="text-sm text-white block">{branch.nombre}</span>
+                                        </div>
+                                        {isSelected && (
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                value={stockDistribution[branch.sucursal_id!] || 0}
+                                                onChange={(e) => handleBranchStockChange(branch.sucursal_id!, e.target.value)}
+                                                className="w-20 input h-8 text-center text-sm p-1"
+                                                placeholder="Cant."
+                                                onClick={(e) => e.stopPropagation()}
+                                            />
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        <p className="text-xs text-slate-400 mt-2">Seleccione las sucursales donde desea inicializar stock.</p>
                     </div>
 
                     <div>

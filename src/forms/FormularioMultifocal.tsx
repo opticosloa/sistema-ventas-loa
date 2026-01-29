@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
 import { Save, Tag, Disc, Sparkles, DollarSign } from 'lucide-react';
-import { upsertMultifocal, getBrands, getModels, type MultifocalBrand, type MultifocalModel } from '../../services/multifocales.api';
-import { getMaterials, getTreatments, type CrystalMaterial, type CrystalTreatment } from '../../services/crystals.api';
+import { upsertMultifocal, getBrands, getModels, type MultifocalBrand, type MultifocalModel } from '../services/multifocales.api';
+import { getMaterials, getTreatments, type CrystalMaterial, type CrystalTreatment } from '../services/crystals.api';
 
 export const FormularioMultifocal: React.FC = () => {
     const [loading, setLoading] = useState(false);

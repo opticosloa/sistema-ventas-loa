@@ -1,9 +1,11 @@
 import { Outlet, useNavigate } from "react-router-dom";
 import { useAppSelector } from "../../hooks";
+import { useBranch } from '../../context/BranchContext';
 
 export const DashboardTaller = () => {
     const navigate = useNavigate();
     const { nombre } = useAppSelector(state => state.auth);
+    const { currentBranch } = useBranch();
 
     return (
         <div className="min-h-screen w-full bg-gradient-to-r from-[#006684] to-[#2db1c3] flex flex-col">
@@ -11,6 +13,9 @@ export const DashboardTaller = () => {
 
                 <h1 className="text-3xl text-white font-semibold mb-8 text-center drop-shadow-md">
                     Bienvenido, {nombre}
+                    <span className="text-xl ml-3 opacity-90 font-normal border-l pl-3 border-white/40">
+                        {currentBranch?.nombre}
+                    </span>
                 </h1>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-6xl mx-auto">

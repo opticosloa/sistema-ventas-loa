@@ -3,7 +3,10 @@ import LOAApi from '../../api/LOAApi';
 import { getObrasSociales } from '../../services/obrasSociales.api';
 import { getMaterials, getTreatments } from '../../services/crystals.api';
 
+import { useBranch } from '../../context/BranchContext';
+
 export const useVentaData = () => {
+    const { currentBranch } = useBranch();
     const [dolarRate, setDolarRate] = useState(0);
     const [availableCrystals, setAvailableCrystals] = useState<any[]>([]);
     const [obrasSociales, setObrasSociales] = useState<any[]>([]);
@@ -23,9 +26,19 @@ export const useVentaData = () => {
                         return 0;
                     });
 
-                // 2. Crystals
-                const crystalsPromise = LOAApi.get('/api/products/type/CRISTAL')
-                    .then(res => (Array.isArray(res.data.result) ? res.data.result : []))
+                // 2. Crystals (Now branch aware)
+                // Use generic /api/products endpoint with tipo & sucursal_id
+                const params = currentBranch?.sucursal_id
+                    ? `?tipo=CRISTAL&sucursal_id=${currentBranch.sucursal_id}`
+                    : `?tipo=CRISTAL`;
+
+                const crystalsPromise = LOAApi.get(`/api/products${params}`) // Changed from /api/products/type/CRISTAL
+                    .then(res => {
+                        // The new endpoint returns { success: true, result: [...] } or { result: { rows: [] } } depending on backend wrapper
+                        // ProductsController.getProducts returns res.json({ success: true, result: ... }) where result is rows or result.
+                        // So res.data.result should be the array.
+                        return Array.isArray(res.data.result) ? res.data.result : (res.data.result?.rows || []);
+                    })
                     .catch(err => {
                         console.error("Error fetching crystals:", err);
                         return [];
@@ -70,8 +83,14 @@ export const useVentaData = () => {
             }
         };
 
-        loadAllData();
-    }, []);
+        if (currentBranch?.sucursal_id) {
+            loadAllData();
+        } else {
+            // Maybe load generic if no branch? Or wait? 
+            // Logic: If user is logged in, branch should be set. If not, maybe wait.
+            loadAllData();
+        }
+    }, [currentBranch?.sucursal_id]);
 
     return {
         dolarRate,
