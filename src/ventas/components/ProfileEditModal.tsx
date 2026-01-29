@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
 import LOAApi from '../../api/LOAApi';
 import { useAuthStore } from '../../hooks';
+import { ChangePasswordModal } from './ChangePasswordModal';
 
 interface ProfileEditModalProps {
     onClose: () => void;
@@ -25,6 +26,8 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ onClose, tar
         cuenta_corriente: 0,
         role: role || ''
     });
+
+    const [showChangePasswordModal, setShowChangePasswordModal] = useState(false);
 
     const [loading, setLoading] = useState(false);
     const [fetching, setFetching] = useState(true);
@@ -199,6 +202,14 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ onClose, tar
                     </div>
 
                     <div className="md:col-span-2 flex justify-end gap-3 mt-4 pt-4 border-t">
+                        <button
+                            type="button"
+                            onClick={() => setShowChangePasswordModal(true)}
+                            className="btn-secondary px-4 mr-auto border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300"
+                        >
+                            Cambiar Contraseña
+                        </button>
+
                         <button type="button" onClick={onClose} className="btn-secondary px-6">
                             Cancelar
                         </button>
@@ -214,6 +225,13 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({ onClose, tar
 
                 </form>
             </div>
+
+            {showChangePasswordModal && (
+                <ChangePasswordModal
+                    onClose={() => setShowChangePasswordModal(false)}
+                    targetEmail={effectiveEmail || ''}
+                />
+            )}
         </div>
     );
 };
