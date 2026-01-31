@@ -47,8 +47,11 @@ export const authSlice = createSlice({
         },
         clearErrorMessage: (state) => {
             state.errorMessage = null;
+        },
+        updateUserBranch: (state, action) => {
+            state.sucursal_id = action.payload;
         }
     }
 });
 
-export const { login, logout, checkingCredential, clearErrorMessage } = authSlice.actions;
+export const { login, logout, checkingCredential, clearErrorMessage, updateUserBranch } = authSlice.actions;

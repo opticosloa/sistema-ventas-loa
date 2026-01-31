@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
-import { X, Tag, Save } from 'lucide-react';
+import { X, Tag, Save, Plus } from 'lucide-react';
 import LOAApi from '../../../api/LOAApi';
 import type { Brand } from '../../../types/Marcas';
+import { getProviders, type Provider } from '../../../services/providers.api';
+import { ProviderCreateModal } from './ProviderCreateModal';
 
 interface BrandCreateModalProps {
     isOpen: boolean;
@@ -14,11 +16,31 @@ interface BrandCreateModalProps {
 export const BrandCreateModal: React.FC<BrandCreateModalProps> = ({ isOpen, onClose, onSuccess, initialName = '' }) => {
     const [loading, setLoading] = useState(false);
     const [nombre, setNombre] = useState(initialName);
+    const [providers, setProviders] = useState<Provider[]>([]);
+    const [selectedProviderId, setSelectedProviderId] = useState<string>('');
+    const [isProviderModalOpen, setIsProviderModalOpen] = useState(false);
 
-    // Sync if initialName changes and modal opens (though usually mounted conditionally or state reset)
-    React.useEffect(() => {
-        if (isOpen) setNombre(initialName);
+    // Sync if initialName changes and modal opens
+    useEffect(() => {
+        if (isOpen) {
+            setNombre(initialName);
+            loadProviders();
+        }
     }, [initialName, isOpen]);
+
+    const loadProviders = async () => {
+        try {
+            const data = await getProviders();
+            setProviders(data || []);
+        } catch (error) {
+            console.error("Error loading providers", error);
+        }
+    };
+
+    const handleProviderSuccess = (newProvider: Provider) => {
+        setProviders(prev => [...prev, newProvider]);
+        setSelectedProviderId(newProvider.proveedor_id); // Auto select new provider
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -28,24 +50,52 @@ export const BrandCreateModal: React.FC<BrandCreateModalProps> = ({ isOpen, onCl
             return;
         }
 
+        if (!selectedProviderId) {
+            Swal.fire("Info", "Debe seleccionar un proveedor", "info");
+            return;
+        }
+
         setLoading(true);
         try {
-            // Using generic post, assuming backend handles null/undefined provider_id
-            const { data } = await LOAApi.post('/api/brands', { nombre });
+            // Using generic post
+            const { data } = await LOAApi.post('/api/brands', {
+                nombre,
+                proveedor_id: selectedProviderId
+            });
 
-            if (data.success) {
-                // Assuming data.result is the created brand or array with 1 item
-                // Usually for stored procedures returning rows, it might be data.result.rows[0] or data.result[0]
-                // Based on BrandController: res.json({ success: true, result });
-                // If sp_marca_crear returns the row, it's likely inside result.rows[0] or result directly if helper handles it.
-                // Let's assume standard behavior:
-                const newBrand = Array.isArray(data.result) ? data.result[0] : (data.result.rows ? data.result.rows[0] : data.result);
+            console.log("Brand Create Response:", data);
+
+            // Correct success check logic
+            if (data && (data.success || data.marca_id)) {
+                let newBrand: Brand;
+
+                // Handle different response structures gracefully
+                if (data.result) {
+                    if (Array.isArray(data.result)) newBrand = data.result[0];
+                    else if ('rows' in data.result && Array.isArray(data.result.rows)) newBrand = data.result.rows[0];
+                    else newBrand = data.result;
+                } else if (data.marca_id) {
+                    // Sometimes sp returns id directly or wrapped differently
+                    // If backend returns just ID, we might construct the object mostly manually or refecth
+                    // Assuming standard response wrapper based on controller usually
+                    const createdId = typeof data.marca_id === 'object' ? data.marca_id?.sp_marca_crear || data.marca_id : data.marca_id;
+
+                    newBrand = {
+                        marca_id: createdId,
+                        nombre: nombre.trim().toUpperCase(),
+                        proveedor_id: selectedProviderId
+                    } as any;
+                } else {
+                    newBrand = data as any;
+                }
 
                 Swal.fire("Éxito", "Marca creada correctamente", "success");
-                onSuccess(newBrand);
+
+                // Ensure we pass a valid object back
+                if (onSuccess) onSuccess(newBrand);
                 onClose();
             } else {
-                Swal.fire("Error", "Error al crear marca", "error");
+                Swal.fire("Error", "Error al crear marca: Respuesta inesperada", "error");
             }
         } catch (error: any) {
             console.error(error);
@@ -89,6 +139,34 @@ export const BrandCreateModal: React.FC<BrandCreateModalProps> = ({ isOpen, onCl
                         />
                     </div>
 
+                    <div className="group">
+                        <label className="block text-sm font-medium text-cyan-100 mb-1 ml-1">
+                            Proveedor *
+                        </label>
+                        <div className="flex gap-2">
+                            <select
+                                value={selectedProviderId}
+                                onChange={(e) => setSelectedProviderId(e.target.value)}
+                                className="w-full bg-slate-50 text-slate-900 rounded-lg p-2.5 border border-slate-300 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition-all"
+                            >
+                                <option value="">Seleccione un proveedor</option>
+                                {providers.map(p => (
+                                    <option key={p.proveedor_id} value={p.proveedor_id}>
+                                        {p.nombre}
+                                    </option>
+                                ))}
+                            </select>
+                            <button
+                                type="button"
+                                onClick={() => setIsProviderModalOpen(true)}
+                                className="bg-cyan-600 hover:bg-cyan-500 text-white p-2.5 rounded-lg transition-colors border border-white/20"
+                                title="Nuevo Proveedor"
+                            >
+                                <Plus size={20} />
+                            </button>
+                        </div>
+                    </div>
+
                     <div className="pt-2 flex justify-end gap-3">
                         <button
                             type="button"
@@ -118,6 +196,12 @@ export const BrandCreateModal: React.FC<BrandCreateModalProps> = ({ isOpen, onCl
                     </div>
                 </form>
             </div>
+
+            <ProviderCreateModal
+                isOpen={isProviderModalOpen}
+                onClose={() => setIsProviderModalOpen(false)}
+                onSuccess={handleProviderSuccess}
+            />
         </div>
     );
 };

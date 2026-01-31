@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Settings, ChevronDown, Wallet, Building2, Tag, Layers, MapPin } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../../hooks/useAppDispatch';
-import { startLogout } from '../../store';
+import { startLogout, updateUserBranch } from '../../store';
 import { Logo } from './Logo';
 import { UserWidget } from './UserWidget';
 import { SideBar } from '.';
@@ -11,6 +11,7 @@ import { ProfileEditModal } from './ProfileEditModal';
 import { BulkPriceUpdateModal } from '../../components/modals/BulkPriceUpdateModal';
 import { useBranch } from '../../context/BranchContext';
 import LOAApi from '../../api/LOAApi';
+import Swal from 'sweetalert2';
 
 export const Navbar = () => {
   const navigate = useNavigate();
@@ -49,11 +50,7 @@ export const Navbar = () => {
   };
 
   const handleBranchSelect = async (branchId: string) => {
-    console.log("LOG 5 - Intentando cambiar a ID:", branchId);
-    console.log("LOG 6 - Lista de sucursales disponible:", branches);
     const branch = branches.find(b => b.sucursal_id === branchId);
-    console.log("LOG 7 - Sucursal encontrada:", branch);
-    console.log(branch);
     if (branch) {
       try {
         if (uid) {
@@ -62,13 +59,15 @@ export const Navbar = () => {
             nueva_sucursal_id: branchId
           });
         }
+        dispatch(updateUserBranch(branchId));
+        setCurrentBranch(branch);
+        setShowConfigDropdown(false);
+        Swal.fire('Cambio exitoso', 'Se ha cambiado la sucursal exitosamente', 'success');
       } catch (e) {
         console.error("Failed to persist branch change", e);
       }
 
-      setCurrentBranch(branch);
-      setShowConfigDropdown(false);
-      window.location.reload();
+
     }
   };
 

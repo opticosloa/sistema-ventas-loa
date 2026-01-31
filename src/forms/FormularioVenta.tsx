@@ -34,7 +34,12 @@ const initialForm: FormValues = {
   clienteName: "",
   clienteApellido: "",
   clienteDomicilio: "",
-  clienteFechaRecibido: new Date().toISOString().slice(0, 16),
+  clienteFechaRecibido: (() => {
+    const now = new Date();
+    // Force UTC-3
+    const utcMinus3 = new Date(now.getTime() - (3 * 60 * 60 * 1000));
+    return utcMinus3.toISOString().slice(0, 16);
+  })(),
   clienteFechaEntrega: (() => {
     const now = new Date();
     // Adjust to local time before ISO string

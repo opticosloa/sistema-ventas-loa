@@ -76,6 +76,15 @@ export const ListaSucursales: React.FC = () => {
                                         <p><span className="text-slate-500 block text-xs">Dirección</span> {sucursal.direccion || 'No especificada'}</p>
                                         <p><span className="text-slate-500 block text-xs">Teléfono</span> {sucursal.telefono || 'No especificado'}</p>
 
+                                        <div className="mt-2">
+                                            <span className="text-slate-500 block text-xs">Encargado</span>
+                                            {sucursal.nombre_encargado ? (
+                                                <span className="text-slate-300 font-medium">{sucursal.nombre_encargado}</span>
+                                            ) : (
+                                                <span className="text-gray-500 italic">Sin asignar</span>
+                                            )}
+                                        </div>
+
                                         <div className="pt-3 border-t border-slate-700 mt-3">
                                             <span className="text-slate-500 block text-xs mb-1">Mercado Pago</span>
                                             {sucursal.mp_public_key ? (
