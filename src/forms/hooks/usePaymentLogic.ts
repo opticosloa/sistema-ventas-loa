@@ -806,9 +806,9 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
         try {
             const { data } = await LOAApi.post('/api/payments/mercadopago/dynamic', {
                 venta_id: ventaId,
-                amount: amount,
+                total: amount,
                 type: 'QR', // Changed from 'POINT' to 'QR' based on context
-                sucursal_id: 'SUCURSAL_DEFAULT' // Kept existing sucursal_id
+                sucursal_id: currentBranch?.sucursal_id || null
             });
 
             if (data.success && data.result?.qr_data) {
@@ -841,7 +841,8 @@ export const usePaymentLogic = (overrideVentaId?: string | number): UsePaymentLo
             await LOAApi.post('/api/payments/mercadopago/point', {
                 venta_id: ventaId,
                 monto: amount,
-                device_id: deviceId
+                device_id: deviceId,
+                sucursal_id: currentBranch?.sucursal_id || null
             }).then((resp) => {
                 if (resp.data.success) {
                     // GUARDAMOS EL ID ESPECÍFICO DE ESTE PAGO

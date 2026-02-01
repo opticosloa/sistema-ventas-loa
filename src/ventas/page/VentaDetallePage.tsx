@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import LOAApi from "../../api/LOAApi";
 import { usePayment } from "../../hooks";
 import { BotonEntregarTicket } from "../components/BotonEntregarTicket";
+import { useBranch } from "../../context/BranchContext";
 
 interface Props {
     ventaId: string;
@@ -11,6 +12,7 @@ type EstadoVenta = "PENDIENTE" | "PAGADA";
 
 export const VentaDetallePage = ({ ventaId }: Props) => {
     const { payWithMercadoPago, loading, error } = usePayment();
+    const { currentBranch } = useBranch();
 
     const [total, setTotal] = useState<number>(0);
     const [estado, setEstado] = useState<EstadoVenta | null>(null);
@@ -56,7 +58,7 @@ export const VentaDetallePage = ({ ventaId }: Props) => {
             {/* 🔹 ACCIONES */}
             {estado === "PENDIENTE" && (
                 <button
-                    onClick={() => payWithMercadoPago(ventaId, total)}
+                    onClick={() => payWithMercadoPago(ventaId, total, currentBranch?.sucursal_id || '')}
                     disabled={loading}
                     className="
             bg-blue-600
