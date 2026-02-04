@@ -3,7 +3,7 @@ import Swal from 'sweetalert2';
 import LOAApi from '../../api/LOAApi';
 
 interface MaxDiscountModalProps {
-    userId: number;
+    userId: string;
     initialDiscount: number;
     onClose: () => void;
     onSuccess: () => void;

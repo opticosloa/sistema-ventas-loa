@@ -3,7 +3,7 @@ import Swal from 'sweetalert2';
 import LOAApi from '../../api/LOAApi';
 
 interface SecurityPinModalProps {
-    userId: number;
+    userId: string;
     userName: string;
     onClose: () => void;
     onSuccess: () => void;

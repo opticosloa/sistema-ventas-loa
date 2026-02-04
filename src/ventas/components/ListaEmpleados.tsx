@@ -8,6 +8,8 @@ import { SecurityPinModal } from './SecurityPinModal';
 import { useAuthStore } from '../../hooks';
 import { ProfileEditModal } from './ProfileEditModal';
 import { MaxDiscountModal } from './MaxDiscountModal';
+import { MoveUserModal } from './MoveUserModal';
+import { ScheduleUserModal } from './ScheduleUserModal';
 
 const ITEMS_PER_PAGE = 25;
 
@@ -56,7 +58,7 @@ export const ListaEmpleados: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
       setShowForm(false);
       setNewEmpleado({
-        usuario_id: 0,
+        usuario_id: '',
         nombre: '',
         apellido: '',
         cuit: 0,
@@ -78,7 +80,7 @@ export const ListaEmpleados: React.FC = () => {
   });
 
   const deleteUserMutation = useMutation({
-    mutationFn: async (id: number) => {
+    mutationFn: async (id: string) => {
       return await LOAApi.delete(`/api/users/${id}`);
     },
     onSuccess: () => {
@@ -106,9 +108,11 @@ export const ListaEmpleados: React.FC = () => {
   const [showPinModal, setShowPinModal] = useState(false);
   const [showProfileEditModal, setShowProfileEditModal] = useState(false);
   const [showMaxDiscountModal, setShowMaxDiscountModal] = useState(false);
+  const [showMoveModal, setShowMoveModal] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [newEmpleado, setNewEmpleado] = useState<Empleado>({
-    usuario_id: 0,
+    usuario_id: '',
     nombre: '',
     apellido: '',
     cuit: 0,
@@ -277,6 +281,7 @@ export const ListaEmpleados: React.FC = () => {
               <th className="px-4 py-3 text-left text-sm">Nombre y Apellido</th>
               <th className="px-4 py-3 text-left text-sm">CUIT</th>
               <th className="px-4 py-3 text-left text-sm">Rol</th>
+              <th className="px-4 py-3 text-left text-sm">Sucursal Actual</th>
               <th className="px-4 py-3 text-left text-sm">Teléfono</th>
               <th className="px-4 py-3 text-left text-sm">Última Conexión</th>
               <th className="px-4 py-3 text-left text-sm">Cuenta / Acciones</th>
@@ -296,6 +301,12 @@ export const ListaEmpleados: React.FC = () => {
                 <td className="px-4 py-3 text-sm whitespace-nowrap">{emp.cuit}</td>
 
                 <td className="px-4 py-3 text-sm whitespace-nowrap">{emp.rol}</td>
+
+                <td className="px-4 py-3 text-sm whitespace-nowrap">
+                  <span className={`px-2 py-1 rounded text-xs font-semibold ${emp.sucursal_nombre ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>
+                    {emp.sucursal_nombre || 'Sin asignar'}
+                  </span>
+                </td>
 
                 <td className="px-4 py-3 text-sm whitespace-nowrap">{emp.telefono}</td>
 
@@ -467,6 +478,25 @@ export const ListaEmpleados: React.FC = () => {
 
                       return null;
                     })()}
+
+
+                    {/* Botones de Gestión de Sucursales: Solo ADMIN/SUPERADMIN */}
+                    {(userRole === 'ADMIN' || userRole === 'SUPERADMIN') && (
+                      <>
+                        <button
+                          className="bg-indigo-100 text-indigo-700 hover:bg-indigo-200 px-4 py-2 rounded-lg font-medium transition-colors"
+                          onClick={() => setShowMoveModal(true)}
+                        >
+                          Mover
+                        </button>
+                        <button
+                          className="bg-purple-100 text-purple-700 hover:bg-purple-200 px-4 py-2 rounded-lg font-medium transition-colors"
+                          onClick={() => setShowScheduleModal(true)}
+                        >
+                          Cronograma
+                        </button>
+                      </>
+                    )}
 
                     <button className="btn-secondary" onClick={() => console.log("Historial", selected.usuario_id)}>Historial</button>
                   </div>
@@ -693,6 +723,30 @@ export const ListaEmpleados: React.FC = () => {
             setShowPinModal(false);
             // Optional: show a toast or keep the details modal open
           }}
+        />
+      )}
+
+      {/* Move User Modal */}
+      {showMoveModal && selected && (
+        <MoveUserModal
+          userId={selected.usuario_id}
+          userName={`${selected.nombre} ${selected.apellido}`}
+          currentBranchId={selected.sucursal_id?.toString()}
+          onClose={() => setShowMoveModal(false)}
+          onSuccess={() => {
+            setShowMoveModal(false);
+            queryClient.invalidateQueries({ queryKey: ['users'] });
+            closeModal();
+          }}
+        />
+      )}
+
+      {/* Schedule User Modal */}
+      {showScheduleModal && selected && (
+        <ScheduleUserModal
+          userId={selected.usuario_id}
+          userName={`${selected.nombre} ${selected.apellido}`}
+          onClose={() => setShowScheduleModal(false)}
         />
       )}
     </div>

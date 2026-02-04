@@ -1,5 +1,5 @@
 export interface Empleado {
-  usuario_id: number;
+  usuario_id: string;
   nombre: string;
   apellido: string;
   cuit: number;
@@ -11,6 +11,7 @@ export interface Empleado {
   cuenta_corriente: number;
   email?: string; // Optional for list, required for creation
   password?: string; // Optional for list, required for creation
-  sucursal_id?: number;
+  sucursal_id?: string;
+  sucursal_nombre?: string;
   max_descuento?: number;
 }
