@@ -42,6 +42,26 @@ export const ListaEmpleados: React.FC = () => {
     }
   });
 
+  // 1. Agregamos el fetch de sucursales
+  const { data: sucursales = [] } = useQuery({
+    queryKey: ['tenants'],
+    queryFn: async () => {
+      const { data } = await LOAApi.get<any>('/api/tenants');
+      // Manejamos el formato .rows que usa tu backend
+      const lista = data.result?.rows || data.result || [];
+      return Array.isArray(lista) ? lista : [];
+    }
+  });
+
+  // 2. Creamos un diccionario { "uuid": "Nombre Sucursal" }
+  const sucursalMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    sucursales.forEach((s: any) => {
+      map[s.sucursal_id] = s.nombre;
+    });
+    return map;
+  }, [sucursales]);
+
   const createUserMutation = useMutation({
     mutationFn: async (newEmp: Empleado) => {
       // Map 'password' from form to 'password_hash' for backend
@@ -303,8 +323,8 @@ export const ListaEmpleados: React.FC = () => {
                 <td className="px-4 py-3 text-sm whitespace-nowrap">{emp.rol}</td>
 
                 <td className="px-4 py-3 text-sm whitespace-nowrap">
-                  <span className={`px-2 py-1 rounded text-xs font-semibold ${emp.sucursal_nombre ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>
-                    {emp.sucursal_nombre || 'Sin asignar'}
+                  <span className={`px-2 py-1 rounded text-xs font-semibold ${emp.sucursal_id ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>
+                    {emp.sucursal_id ? (sucursalMap[emp.sucursal_id] || 'Cargando...') : 'Sin asignar'}
                   </span>
                 </td>
 
