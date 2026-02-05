@@ -16,18 +16,15 @@ export const FormularioMultifocal: React.FC = () => {
     const [selectedBrandId, setSelectedBrandId] = useState<string>('');
     const [isManualPrice, setIsManualPrice] = useState(false);
 
+    // Initial Form State
     const initialForm = {
         marca: '',
-        modelo: '',
-        material: '',
-        tratamiento: '',
-        esfera_desde: 0,
-        esfera_hasta: 0,
-        cilindro_desde: 0,
-        cilindro_hasta: 0,
-        precio: 0,  // Precio Venta
-        costo: 0,   // Precio Costo
-        margen: 0   // Margen %
+        modelo_id: '',
+        material_id: '',
+        tratamiento_id: '',
+        precio: 0,
+        costo: 0,
+        margen: 0
     };
 
     const [formData, setFormData] = useState(initialForm);
@@ -88,7 +85,7 @@ export const FormularioMultifocal: React.FC = () => {
         const { name, value, type } = e.target;
 
         if (name === 'precio') setIsManualPrice(true);
-        if (name === 'margen') setIsManualPrice(false); // Reset manual price override if editing margin directly
+        if (name === 'margen') setIsManualPrice(false);
 
         setFormData(prev => ({
             ...prev,
@@ -101,31 +98,29 @@ export const FormularioMultifocal: React.FC = () => {
         const brandName = brands.find(b => b.marca_id === brandId)?.nombre || '';
 
         setSelectedBrandId(brandId);
-        setFormData(prev => ({ ...prev, marca: brandName, modelo: '' }));
-    };
-
-    const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        const modelId = e.target.value;
-        const modelName = models.find(m => m.modelo_id === modelId)?.nombre || '';
-        setFormData(prev => ({ ...prev, modelo: modelName }));
+        setFormData(prev => ({ ...prev, marca: brandName, modelo_id: '' }));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!formData.marca || !formData.modelo || !formData.material) {
-            Swal.fire("Error", "Marca, Modelo y Material son obligatorios", "warning");
+
+        if (!formData.modelo_id || !formData.material_id || !formData.precio) {
+            Swal.fire("Error", "Marca, Modelo, Material y Precio son obligatorios", "warning");
             return;
         }
 
+        const payload = {
+            modelo_id: formData.modelo_id,
+            material_id: formData.material_id,
+            tratamiento_id: formData.tratamiento_id || undefined,
+            precio: formData.precio,
+            costo: formData.costo
+        };
+
         setLoading(true);
         try {
-            // Remove 'margen' from payload if API doesn't support it, or keep it if it does
-            // API expects: id, marca, modelo, material, tratamiento, esf_desde, etc.
-            // It uses 'precio' and 'costo'. We don't send 'margen' unless API changes.
-            const { margen, ...payload } = formData;
-
-            await upsertMultifocal(payload as any);
-            Swal.fire("Éxito", "Multifocal creado correctamente", "success");
+            await upsertMultifocal(payload);
+            Swal.fire("Éxito", "Multifocal guardado correctamente (Combinación Única).", "success");
             setFormData(initialForm);
             setSelectedBrandId('');
             setIsManualPrice(false);
@@ -143,14 +138,12 @@ export const FormularioMultifocal: React.FC = () => {
     return (
         <form onSubmit={handleSubmit} className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* DEFINICION DEL PRODUCTO */}
-            <section className="border border-white rounded-xl p-6 shadow-xl relative">
+            <section className="border border-white rounded-xl p-6 shadow-xl relative bg-slate-800/50 backdrop-blur-sm">
                 <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-                    <h1 className="text-6xl font-black">MULTI</h1>
+                    <h1 className="text-6xl font-black text-white">CATALOGO</h1>
                 </div>
-                <h3 className="text-lg font-medium text-crema mb-4 border-b border-white/10 pb-2">1. Definición del Producto</h3>
-
+                <h3 className="text-lg font-medium text-crema mb-4 border-b border-white/10 pb-2">Definición de Catálogo Multifocal</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Grupo 1: Identidad */}
                     <div className="space-y-4">
                         <div>
                             <label className={labelClass}><Tag size={16} /> Marca</label>
@@ -170,9 +163,9 @@ export const FormularioMultifocal: React.FC = () => {
                         <div>
                             <label className={labelClass}><Tag size={16} /> Modelo</label>
                             <select
-                                name="modelo"
-                                value={models.find(m => m.nombre === formData.modelo)?.modelo_id || ''}
-                                onChange={handleModelChange}
+                                name="modelo_id"
+                                value={formData.modelo_id}
+                                onChange={handleChange}
                                 className={inputClass}
                                 required
                                 disabled={!selectedBrandId}
@@ -184,72 +177,35 @@ export const FormularioMultifocal: React.FC = () => {
                             </select>
                         </div>
                     </div>
-
-                    {/* Grupo 2: Características */}
                     <div className="space-y-4">
                         <div>
                             <label className={labelClass}><Disc size={16} /> Material</label>
                             <select
-                                name="material"
-                                value={formData.material}
+                                name="material_id"
+                                value={formData.material_id}
                                 onChange={handleChange}
                                 className={inputClass}
                                 required
                             >
                                 <option value="">Seleccionar Material...</option>
                                 {materials.map(m => (
-                                    <option key={m.material_id} value={m.nombre}>{m.nombre}</option>
+                                    <option key={m.material_id} value={m.material_id}>{m.nombre}</option>
                                 ))}
                             </select>
                         </div>
                         <div>
-                            <label className={labelClass}><Sparkles size={16} /> Tratamiento</label>
+                            <label className={labelClass}><Sparkles size={16} /> Tratamiento (Opcional)</label>
                             <select
-                                name="tratamiento"
-                                value={formData.tratamiento}
+                                name="tratamiento_id"
+                                value={formData.tratamiento_id}
                                 onChange={handleChange}
                                 className={inputClass}
                             >
-                                <option value="">Seleccionar Tratamiento...</option>
+                                <option value="">Sin Tratamiento / Estándar</option>
                                 {treatments.map(t => (
-                                    <option key={t.tratamiento_id} value={t.nombre}>{t.nombre}</option>
+                                    <option key={t.tratamiento_id} value={t.tratamiento_id}>{t.nombre}</option>
                                 ))}
                             </select>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            {/* RANGOS */}
-            <section className="border border-white rounded-xl p-6 shadow-xl relative overflow-hidden">
-                <h3 className="text-lg font-medium text-crema mb-4 border-b border-white/10 pb-2">2. Definición de Rangos</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <div className="bg-white/5 p-4 rounded-lg">
-                        <label className="block text-center text-blanco font-bold mb-3">Rango Esférico (Esf)</label>
-                        <div className="flex items-center gap-2">
-                            <div className="flex-1">
-                                <label className="text-xs text-crema mb-1 block">Desde</label>
-                                <input type="number" step="0.25" name="esfera_desde" value={formData.esfera_desde} onChange={handleChange} className={inputClass} />
-                            </div>
-                            <span className="text-crema pt-5">➜</span>
-                            <div className="flex-1">
-                                <label className="text-xs text-crema mb-1 block">Hasta</label>
-                                <input type="number" step="0.25" name="esfera_hasta" value={formData.esfera_hasta} onChange={handleChange} className={inputClass} />
-                            </div>
-                        </div>
-                    </div>
-                    <div className="bg-white/5 p-4 rounded-lg">
-                        <label className="block text-center text-blanco font-bold mb-3">Rango Cilíndrico (Cil)</label>
-                        <div className="flex items-center gap-2">
-                            <div className="flex-1">
-                                <label className="text-xs text-crema mb-1 block">Desde</label>
-                                <input type="number" step="0.25" name="cilindro_desde" value={formData.cilindro_desde} onChange={handleChange} className={inputClass} />
-                            </div>
-                            <span className="text-crema pt-5">➜</span>
-                            <div className="flex-1">
-                                <label className="text-xs text-crema mb-1 block">Hasta</label>
-                                <input type="number" step="0.25" name="cilindro_hasta" value={formData.cilindro_hasta} onChange={handleChange} className={inputClass} />
-                            </div>
                         </div>
                     </div>
                 </div>
@@ -276,7 +232,7 @@ export const FormularioMultifocal: React.FC = () => {
             <div className="flex justify-end pt-4">
                 <button type="submit" disabled={loading} className="bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold py-3 px-8 rounded-xl transition-all shadow-lg shadow-purple-900/30 active:scale-95 w-full md:w-auto text-lg flex items-center justify-center gap-2">
                     <Save size={20} />
-                    {loading ? 'Guardando...' : 'Crear Multifocal'}
+                    {loading ? 'Guardando...' : 'Guardar en Catálogo'}
                 </button>
             </div>
         </form>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
-import { X, Save, Layers, Tag, Disc, Sparkles, DollarSign, Activity } from 'lucide-react';
+import { X, Save, Layers, Tag, Disc, Sparkles, DollarSign } from 'lucide-react';
 import { upsertMultifocal, getBrands, getModels, type Multifocal, type MultifocalBrand, type MultifocalModel } from '../../services/multifocales.api';
 
 interface MultifocalModalProps {
@@ -19,14 +19,9 @@ export const MultifocalModal: React.FC<MultifocalModalProps> = ({ isOpen, onClos
     const [selectedBrandId, setSelectedBrandId] = useState<string>('');
 
     const [formData, setFormData] = useState({
-        marca: '',
-        modelo: '',
+        modelo_id: '',
         material: '',
         tratamiento: '',
-        esfera_desde: 0,
-        esfera_hasta: 0,
-        cilindro_desde: 0,
-        cilindro_hasta: 0,
         precio: 0,
         costo: 0
     });
@@ -43,31 +38,20 @@ export const MultifocalModal: React.FC<MultifocalModalProps> = ({ isOpen, onClos
         if (isOpen) {
             if (multifocalToEdit) {
                 setFormData({
-                    marca: multifocalToEdit.marca,
-                    modelo: multifocalToEdit.modelo,
+                    modelo_id: multifocalToEdit.modelo_id,
                     material: multifocalToEdit.material,
                     tratamiento: multifocalToEdit.tratamiento || '',
-                    esfera_desde: multifocalToEdit.esfera_desde,
-                    esfera_hasta: multifocalToEdit.esfera_hasta,
-                    cilindro_desde: multifocalToEdit.cilindro_desde,
-                    cilindro_hasta: multifocalToEdit.cilindro_hasta,
                     precio: multifocalToEdit.precio,
                     costo: multifocalToEdit.costo || 0
                 });
-
-                // Try to match existing brand name to ID to load models
-                // This is optimistic matching since we only stored names
-                // It will be resolved when brands load, we check below
+                // We need to resolve Brand from Model if possible, or just expect it to be passed
+                // For now, let's assume we can try to find the brand via model lookup or other means
+                // But simplified: the user selects brand again or we fetch models
             } else {
                 setFormData({
-                    marca: '',
-                    modelo: '',
+                    modelo_id: '',
                     material: '',
                     tratamiento: '',
-                    esfera_desde: -4.00,
-                    esfera_hasta: 4.00,
-                    cilindro_desde: -2.00,
-                    cilindro_hasta: 2.00,
                     precio: 0,
                     costo: 0
                 });
@@ -76,16 +60,6 @@ export const MultifocalModal: React.FC<MultifocalModalProps> = ({ isOpen, onClos
             }
         }
     }, [isOpen, multifocalToEdit]);
-
-    // Sync Brand ID when Brands load or Edit Data changes
-    useEffect(() => {
-        if (formData.marca && brands.length > 0) {
-            const matchedBrand = brands.find(b => b.nombre === formData.marca);
-            if (matchedBrand) {
-                setSelectedBrandId(matchedBrand.marca_id);
-            }
-        }
-    }, [formData.marca, brands]);
 
     // Load Models when Brand ID changes
     useEffect(() => {
@@ -107,25 +81,14 @@ export const MultifocalModal: React.FC<MultifocalModalProps> = ({ isOpen, onClos
 
     const handleBrandChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const brandId = e.target.value;
-        const brandName = brands.find(b => b.marca_id === brandId)?.nombre || '';
-
         setSelectedBrandId(brandId);
-        setFormData(prev => ({ ...prev, marca: brandName, modelo: '' })); // Reset model when brand changes
-    };
-
-    const handleModelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        // Here value will be the Model Name (since we want to save name)
-        // Or Model ID? But we store Name. Let's assume value is Name for simplicity in saving
-        // But to be precise, let's use the ID in the value prop and look up the name
-        const modelId = e.target.value;
-        const modelName = models.find(m => m.modelo_id === modelId)?.nombre || '';
-        setFormData(prev => ({ ...prev, modelo: modelName }));
+        setFormData(prev => ({ ...prev, modelo_id: '' })); // Reset model when brand changes
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!formData.marca || !formData.modelo || !formData.material) {
-            Swal.fire("Error", "Marca, Modelo y Material son obligatorios", "warning");
+        if (!formData.modelo_id || !formData.material) {
+            Swal.fire("Error", "Modelo y Material son obligatorios", "warning");
             return;
         }
 
@@ -191,9 +154,9 @@ export const MultifocalModal: React.FC<MultifocalModalProps> = ({ isOpen, onClos
                             <div>
                                 <label className={labelClass}><Tag size={14} /> Modelo *</label>
                                 <select
-                                    name="modelo"
-                                    value={models.find(m => m.nombre === formData.modelo)?.modelo_id || ''}
-                                    onChange={handleModelChange}
+                                    name="modelo_id"
+                                    value={formData.modelo_id}
+                                    onChange={e => setFormData(prev => ({ ...prev, modelo_id: e.target.value }))}
                                     className={inputClass}
                                     required
                                     disabled={!selectedBrandId}
@@ -215,31 +178,6 @@ export const MultifocalModal: React.FC<MultifocalModalProps> = ({ isOpen, onClos
                             <div>
                                 <label className={labelClass}><Sparkles size={14} /> Tratamiento</label>
                                 <input name="tratamiento" value={formData.tratamiento} onChange={handleChange} className={inputClass} placeholder="Ej: Blue Cut" />
-                            </div>
-                        </div>
-
-                        {/* Grupo 3: Rangos */}
-                        <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
-                            <h4 className="text-sm font-semibold text-cyan-200 mb-3 flex items-center gap-2"><Activity size={16} /> Rangos de Graduación</h4>
-                            <div className="grid grid-cols-2 gap-4 mb-4">
-                                <div>
-                                    <label className="text-xs text-slate-400 mb-1 block">Esfera Desde</label>
-                                    <input type="number" step="0.25" name="esfera_desde" value={formData.esfera_desde} onChange={handleChange} className={inputClass} />
-                                </div>
-                                <div>
-                                    <label className="text-xs text-slate-400 mb-1 block">Esfera Hasta</label>
-                                    <input type="number" step="0.25" name="esfera_hasta" value={formData.esfera_hasta} onChange={handleChange} className={inputClass} />
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="text-xs text-slate-400 mb-1 block">Cilindro Desde</label>
-                                    <input type="number" step="0.25" name="cilindro_desde" value={formData.cilindro_desde} onChange={handleChange} className={inputClass} />
-                                </div>
-                                <div>
-                                    <label className="text-xs text-slate-400 mb-1 block">Cilindro Hasta</label>
-                                    <input type="number" step="0.25" name="cilindro_hasta" value={formData.cilindro_hasta} onChange={handleChange} className={inputClass} />
-                                </div>
                             </div>
                         </div>
 

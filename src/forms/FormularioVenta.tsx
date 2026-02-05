@@ -149,12 +149,14 @@ export const FormularioVenta: React.FC = () => {
     lejos_OI: { id: string | null, price: number },
     cerca_OD: { id: string | null, price: number },
     cerca_OI: { id: string | null, price: number },
+    multifocal: { id: string | null, price: number }, // Added Multifocal field
   }>({
     armazon: { id: null, price: 0 },
     lejos_OD: { id: null, price: 0 },
     lejos_OI: { id: null, price: 0 },
     cerca_OD: { id: null, price: 0 },
     cerca_OI: { id: null, price: 0 },
+    multifocal: { id: null, price: 0 },
   });
 
   // --- AUTO-SAVE LOGIC ---
@@ -616,6 +618,11 @@ export const FormularioVenta: React.FC = () => {
     if (opticItems.cerca_OD.price > 0) addOptic(opticItems.cerca_OD, `Cristal Cerca OD ${formState.cerca_Tipo ? `(${formState.cerca_Tipo})` : ''}`);
     if (opticItems.cerca_OI.price > 0) addOptic(opticItems.cerca_OI, `Cristal Cerca OI ${formState.cerca_Tipo ? `(${formState.cerca_Tipo})` : ''}`);
 
+    // Add Multifocal
+    if (opticItems.multifocal.price > 0) {
+      addOptic(opticItems.multifocal, `Multifocal: ${formState.multifocalTipo}`);
+    }
+
     // Add Frame
     if (opticItems.armazon.id && opticItems.armazon.price > 0) {
       addOptic(opticItems.armazon, "Armazón de Receta");
@@ -853,6 +860,9 @@ export const FormularioVenta: React.FC = () => {
       // Check Cerca OD/OI
       if (hasCercaOD && formState.cerca_Tipo && !opticItems.cerca_OD.id) requiresManualPrice = true;
       if (hasCercaOI && formState.cerca_Tipo && !opticItems.cerca_OI.id) requiresManualPrice = true;
+
+      // Check Multifocal
+      if (multifocalTipo && !opticItems.multifocal.id) requiresManualPrice = true;
 
       if (requiresManualPrice && extraPrice <= 0) {
         setExtraPriceError(true);
@@ -1280,6 +1290,16 @@ export const FormularioVenta: React.FC = () => {
           <MultifocalForm
             formState={formState as FormValues}
             onInputChange={handleInputChangeWrapped}
+            onSelect={(item: any, price: number) => {
+              setOpticItems(prev => ({
+                ...prev,
+                multifocal: { id: item.multifocal_id, price: price }
+              }));
+              // Update display text field to match the selected item
+              // Note: MultifocalForm also triggers onInputChange, but this ensures consistency
+              setFieldValue('multifocalTipo', `${item.marca} ${item.modelo} ${item.material} ${item.tratamiento || ''}`.trim());
+            }}
+            dolarRate={dolarRate}
           />
 
 
@@ -1288,7 +1308,7 @@ export const FormularioVenta: React.FC = () => {
             <label className="text-white font-bold">Total Cristales (Auto-calculado) ($):</label>
             <div className="text-right text-lg font-bold text-celeste">
               {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(
-                opticItems.lejos_OD.price + opticItems.lejos_OI.price + opticItems.cerca_OD.price + opticItems.cerca_OI.price
+                opticItems.lejos_OD.price + opticItems.lejos_OI.price + opticItems.cerca_OD.price + opticItems.cerca_OI.price + opticItems.multifocal.price
               )}
             </div>
           </div>
