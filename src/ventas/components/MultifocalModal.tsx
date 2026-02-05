@@ -38,7 +38,7 @@ export const MultifocalModal: React.FC<MultifocalModalProps> = ({ isOpen, onClos
         if (isOpen) {
             if (multifocalToEdit) {
                 setFormData({
-                    modelo_id: multifocalToEdit.modelo_id,
+                    modelo_id: multifocalToEdit.modelo_id || '',
                     material: multifocalToEdit.material,
                     tratamiento: multifocalToEdit.tratamiento || '',
                     precio: multifocalToEdit.precio,
