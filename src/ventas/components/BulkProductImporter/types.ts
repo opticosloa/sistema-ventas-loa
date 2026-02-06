@@ -9,10 +9,12 @@ export interface BulkImportConfig {
 export interface ParsedProduct {
     id: string; // temp id
     nombre: string;
+    descripcion?: string; // Internal Code (from Codigo)
     precio_costo: number;
     precio_venta: number;
-    precio_sugerido?: number;
-    originalData: any[];
+    // precio_usd will be calculated by backend
+    stock_distribution: { sucursal_id: string; cantidad: number }[];
+    originalData: any;
     selected: boolean;
 }
 

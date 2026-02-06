@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import * as XLSX from 'xlsx';
 import Swal from 'sweetalert2';
-import { Upload, Save, AlertTriangle, FileSpreadsheet, ArrowLeft } from 'lucide-react';
+import { Upload, Save, AlertTriangle, FileSpreadsheet, ArrowLeft, Store } from 'lucide-react';
 import { getBrands } from '../../../services/brands.api';
 import type { Brand } from '../../../services/brands.api';
 import { bulkUpsertProducts } from '../../../services/products.api';
 import { IMPORT_PRESETS, PRODUCT_CATEGORIES } from './types';
 import type { BulkImportConfig, ParsedProduct } from './types';
-
+import { useBranch } from '../../../context/BranchContext'; // Hook for branches
 import { X } from 'lucide-react';
 
 interface BulkProductImporterProps {
@@ -15,6 +15,7 @@ interface BulkProductImporterProps {
 }
 
 export const BulkProductImporter: React.FC<BulkProductImporterProps> = ({ onClose }) => {
+    const { branches } = useBranch();
     const [step, setStep] = useState<number>(1);
     const [config, setConfig] = useState<BulkImportConfig>({
         presetId: IMPORT_PRESETS[0].id,
@@ -30,6 +31,10 @@ export const BulkProductImporter: React.FC<BulkProductImporterProps> = ({ onClos
     // Bulk Edit States
     const [bulkPrice, setBulkPrice] = useState<string>('');
     const [bulkCost, setBulkCost] = useState<string>('');
+
+    // Stock Matrix "Apply All" State
+    // keys: sucursal_id, value: amount
+    const [stockDefaults, setStockDefaults] = useState<Record<string, string>>({});
 
     useEffect(() => {
         loadBrands();
@@ -55,38 +60,52 @@ export const BulkProductImporter: React.FC<BulkProductImporterProps> = ({ onClos
             const wb = XLSX.read(bstr, { type: 'binary' });
             const wsname = wb.SheetNames[0];
             const ws = wb.Sheets[wsname];
-            // Read as array of arrays
-            const data = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][];
 
+            // Read as Objects (Headers = Keys)
+            const data = XLSX.utils.sheet_to_json(ws) as any[];
             processData(data);
         };
         reader.readAsBinaryString(file);
     };
 
-    const processData = (rawData: any[][]) => {
-        const preset = IMPORT_PRESETS.find(p => p.id === config.presetId);
-        if (!preset) return;
+    const processData = (rawData: any[]) => {
+        // Advanced Mapping Logic
+        // Expected Headers: Rubro, Descripcion, Codigo, Precio, Sugerido
 
-        // Skip rows
-        const slicedData = rawData.slice(preset.skipRows);
+        const products = rawData.map((row: any, index: number) => {
+            // 1. Name Generation: Rubro + Descripcion + Clean
+            const rubro = row['Rubro'] || '';
+            const desc = row['Descripcion'] || '';
+            const rawName = `${rubro} ${desc}`;
+            const cleanName = rawName.toUpperCase().trim().replace(/\s+/g, ' ');
 
-        const products = slicedData.map((row: any[], index: number) => {
-            const name = preset.transformFn(row);
-            if (!name) return null; // Skip empty names
+            if (!cleanName) return null;
+
+            // 2. Map other fields
+            const codigo = row['Codigo'] ? String(row['Codigo']).trim() : ''; // Internal
+            const precio = Math.ceil(Number(row['Precio']) || 0); // Costo (Rounded up)
+            const sugerido = Math.ceil(Number(row['Sugerido']) || 0); // Venta (Rounded up)
+
+            // 3. Initialize Stock Distribution (ALL Active Branches with 0)
+            const initialStockDist = branches.map(b => ({
+                sucursal_id: b.sucursal_id!,
+                cantidad: 0
+            }));
 
             return {
                 id: `row-${index}`,
-                nombre: name,
-                precio_costo: 0,
-                precio_venta: 0,
-                precio_sugerido: 0,
+                nombre: cleanName,
+                descripcion: codigo, // "Interna" = Codigo
+                precio_costo: precio,
+                precio_venta: sugerido,
+                stock_distribution: initialStockDist,
                 originalData: row,
                 selected: true
             };
         }).filter((item) => item !== null) as ParsedProduct[];
 
         if (products.length === 0) {
-            Swal.fire('Atención', 'No se encontraron productos válidos o el archivo está vacío.', 'warning');
+            Swal.fire('Atención', 'No se encontraron productos válidos. Verifique las columnas (Rubro, Descripcion, Codigo, Precio, Sugerido).', 'warning');
             return;
         }
 
@@ -94,25 +113,47 @@ export const BulkProductImporter: React.FC<BulkProductImporterProps> = ({ onClos
         setStep(2);
     };
 
-    const handleBulkApply = (field: 'precio_costo' | 'precio_venta' | 'precio_sugerido', value: number) => {
+    const handleBulkApply = (field: 'precio_costo' | 'precio_venta', value: number) => {
         setParsedProducts(prev => prev.map(p => ({
             ...p,
             [field]: value
         })));
         Swal.fire({
-            toast: true,
-            position: 'top-end',
-            icon: 'success',
-            title: 'Precios actualizados',
-            showConfirmButton: false,
-            timer: 1500
+            toast: true, title: 'Precios actualizados', icon: 'success',
+            position: 'top-end', showConfirmButton: false, timer: 1500
         });
+    };
+
+    // Apply Stock Default to ALL rows for a specific branch
+    const handleApplyStockDefault = (sucursalId: string, value: string) => {
+        const qty = parseInt(value) || 0;
+        setStockDefaults(prev => ({ ...prev, [sucursalId]: value }));
+
+        setParsedProducts(prev => prev.map(p => ({
+            ...p,
+            stock_distribution: p.stock_distribution.map(s =>
+                s.sucursal_id === sucursalId ? { ...s, cantidad: qty } : s
+            )
+        })));
     };
 
     const handleRowChange = (id: string, field: string, value: any) => {
         setParsedProducts(prev => prev.map(p =>
             p.id === id ? { ...p, [field]: value } : p
         ));
+    };
+
+    const handleStockChange = (productId: string, sucursalId: string, value: string) => {
+        const qty = parseInt(value) || 0;
+        setParsedProducts(prev => prev.map(p => {
+            if (p.id !== productId) return p;
+            return {
+                ...p,
+                stock_distribution: p.stock_distribution.map(s =>
+                    s.sucursal_id === sucursalId ? { ...s, cantidad: qty } : s
+                )
+            };
+        }));
     };
 
     const handleConfirmImport = async () => {
@@ -123,7 +164,7 @@ export const BulkProductImporter: React.FC<BulkProductImporterProps> = ({ onClos
 
         const result = await Swal.fire({
             title: '¿Confirmar Importación?',
-            text: `Se procesarán ${parsedProducts.length} registros. Esta acción actualizará precios si existen y creará nuevos si no.`,
+            text: `Se procesarán ${parsedProducts.length} productos. Se usarán los nombres generados (Rubro+Desc) y la distribución de stock indicada.`,
             icon: 'question',
             showCancelButton: true,
             confirmButtonText: 'Sí, Importar',
@@ -135,17 +176,17 @@ export const BulkProductImporter: React.FC<BulkProductImporterProps> = ({ onClos
         setIsProcessing(true);
         try {
             // Transform to backend format
+            // SP expects: { nombre, descripcion, tipo, marca_id, precio_costo, precio_venta, stock_distribution }
             const payload = parsedProducts.map(p => ({
                 nombre: p.nombre,
-                marca_id: config.marcaId,
+                descripcion: p.descripcion, // Internal Code
                 tipo: config.categoryId,
-                stock: config.stock,
-                stock_minimo: 0, // Default
+                marca_id: config.marcaId,
                 precio_costo: p.precio_costo,
                 precio_venta: p.precio_venta,
-                precio_usd: 0,
+                stock_distribution: p.stock_distribution, // Array [{ sucursal_id, cantidad }]
+                // Other defaults passed but might be ignored by new Master SP or handled
                 iva: config.defaultIva,
-                descripcion: `Importado masivo ${new Date().toLocaleDateString()}`,
                 is_active: true
             }));
 
@@ -154,12 +195,12 @@ export const BulkProductImporter: React.FC<BulkProductImporterProps> = ({ onClos
             if (response.success) {
                 Swal.fire(
                     'Éxito',
-                    `Importación completada.\nCreados: ${response.created}\nActualizados: ${response.updated}`,
+                    `Importación completada.\n${response.message || ''}\nCreados: ${response.created}\nActualizados: ${response.updated}`,
                     'success'
                 );
-                // Reset or redirect?
                 setStep(1);
                 setParsedProducts([]);
+                setStockDefaults({});
             }
         } catch (error: any) {
             console.error('Import Error', error);
@@ -179,21 +220,15 @@ export const BulkProductImporter: React.FC<BulkProductImporterProps> = ({ onClos
             </h2>
 
             <div className="space-y-4">
-                {/* Preset */}
-                <div>
-                    <label className="block text-sm font-medium text-gray-700">Preset de Importación</label>
-                    <select
-                        className="mt-1 block w-full rounded-md border-gray-800 bg-crema shadow-sm border p-2"
-                        value={config.presetId}
-                        onChange={(e) => setConfig({ ...config, presetId: e.target.value })}
-                    >
-                        {IMPORT_PRESETS.map(p => (
-                            <option key={p.id} value={p.id}>{p.name}</option>
-                        ))}
-                    </select>
+                <div className="p-3 bg-blue-50 text-blue-800 text-sm rounded border border-blue-200">
+                    <strong>Nota:</strong> El archivo Excel debe tener las columnas:
+                    <ul className="list-disc ml-5 mt-1">
+                        <li><b>Rubro</b> y <b>Descripcion</b> (Se unen para el Nombre)</li>
+                        <li><b>Codigo</b> (Se usa como descripción interna)</li>
+                        <li><b>Precio</b> (Costo) y <b>Sugerido</b> (Venta)</li>
+                    </ul>
                 </div>
 
-                {/* Global Settings Grid */}
                 <div className="grid grid-cols-2 gap-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Marca *</label>
@@ -221,16 +256,6 @@ export const BulkProductImporter: React.FC<BulkProductImporterProps> = ({ onClos
                             ))}
                         </select>
                     </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">Stock Inicial</label>
-                        <input
-                            type="number"
-                            className="mt-1 block w-full rounded-md border-gray-800 bg-crema shadow-sm border p-2"
-                            value={config.stock}
-                            onChange={(e) => setConfig({ ...config, stock: Number(e.target.value) })}
-                        />
-                    </div>
                 </div>
 
                 {/* File Upload */}
@@ -245,7 +270,7 @@ export const BulkProductImporter: React.FC<BulkProductImporterProps> = ({ onClos
                     <label htmlFor="file-upload" className="cursor-pointer flex flex-col items-center">
                         <Upload className="w-12 h-12 text-gray-400 mb-2" />
                         <span className="text-gray-600 font-medium">Click para subir archivo (Excel/CSV)</span>
-                        <span className="text-sm text-gray-400 mt-1">Soporta .xlsx, .csv</span>
+                        <span className="text-sm text-gray-400 mt-1">Requiere columnas con nombres específicos</span>
                     </label>
                 </div>
             </div>
@@ -257,7 +282,7 @@ export const BulkProductImporter: React.FC<BulkProductImporterProps> = ({ onClos
             <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-bold flex items-center gap-2">
                     <FileSpreadsheet className="w-6 h-6 text-green-600" />
-                    Paso 2: Vista Previa y Precios
+                    Paso 2: Revisión y Matriz de Stock
                 </h2>
                 <div className="flex gap-2">
                     <button
@@ -271,7 +296,7 @@ export const BulkProductImporter: React.FC<BulkProductImporterProps> = ({ onClos
                         disabled={isProcessing}
                         className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
                     >
-                        {isProcessing ? 'Procesando...' : 'Confirmar Importación'}
+                        {isProcessing ? 'Procesando...' : 'Confirmar Todo'}
                         {!isProcessing && <Save className="w-4 h-4" />}
                     </button>
                 </div>
@@ -281,88 +306,88 @@ export const BulkProductImporter: React.FC<BulkProductImporterProps> = ({ onClos
             <div className="bg-slate-50 p-4 rounded-lg mb-4 border border-slate-200 flex flex-wrap gap-4 items-end">
                 <div className="text-sm font-medium text-slate-700 mr-2 flex items-center gap-1">
                     <AlertTriangle className="w-4 h-4 text-orange-500" />
-                    Edición Masiva:
+                    Edición Masiva Precios:
                 </div>
-
                 <div>
-                    <label className="block text-xs text-gray-500">Aplicar Costo</label>
+                    <label className="block text-xs text-gray-500">Costo</label>
                     <div className="flex">
-                        <input
-                            type="number"
-                            className="w-24 border rounded-l p-1 text-sm"
-                            placeholder="0"
-                            value={bulkCost}
-                            onChange={e => setBulkCost(e.target.value)}
-                        />
-                        <button
-                            onClick={() => handleBulkApply('precio_costo', Number(bulkCost))}
-                            className="bg-slate-200 hover:bg-slate-300 px-2 rounded-r border-t border-b border-r text-xs font-semibold"
-                        >
-                            Aplicar
-                        </button>
+                        <input type="number" className="w-20 border rounded-l p-1 text-sm" placeholder="0"
+                            value={bulkCost} onChange={e => setBulkCost(e.target.value)} />
+                        <button onClick={() => handleBulkApply('precio_costo', Number(bulkCost))}
+                            className="bg-slate-200 hover:bg-slate-300 px-2 rounded-r border text-xs font-semibold">Aplicar</button>
                     </div>
                 </div>
-
                 <div>
-                    <label className="block text-xs text-gray-500">Aplicar Venta</label>
+                    <label className="block text-xs text-gray-500">Venta</label>
                     <div className="flex">
-                        <input
-                            type="number"
-                            className="w-24 border rounded-l p-1 text-sm"
-                            placeholder="0"
-                            value={bulkPrice}
-                            onChange={e => setBulkPrice(e.target.value)}
-                        />
-                        <button
-                            onClick={() => handleBulkApply('precio_venta', Number(bulkPrice))}
-                            className="bg-slate-200 hover:bg-slate-300 px-2 rounded-r border-t border-b border-r text-xs font-semibold"
-                        >
-                            Aplicar
-                        </button>
+                        <input type="number" className="w-20 border rounded-l p-1 text-sm" placeholder="0"
+                            value={bulkPrice} onChange={e => setBulkPrice(e.target.value)} />
+                        <button onClick={() => handleBulkApply('precio_venta', Number(bulkPrice))}
+                            className="bg-slate-200 hover:bg-slate-300 px-2 rounded-r border text-xs font-semibold">Aplicar</button>
                     </div>
                 </div>
-
-                <div className="ml-auto text-sm text-gray-600">
-                    Total registros: <b>{parsedProducts.length}</b>
-                </div>
+                <div className="ml-auto text-sm text-gray-600">Total: <b>{parsedProducts.length}</b></div>
             </div>
 
             {/* Data Table */}
             <div className="flex-1 overflow-auto border rounded-lg">
                 <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50 sticky top-0">
+                    <thead className="bg-gray-100 sticky top-0 z-10">
                         <tr>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Producto (Generado)</th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Costo ($)</th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Venta ($)</th>
-                            <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Datos Originales (Ref)</th>
+                            <th className="px-3 py-2 text-left text-xs font-bold text-gray-600 uppercase tracking-wider w-64">Producto (Generado)</th>
+                            <th className="px-3 py-2 text-left text-xs font-bold text-gray-600 uppercase tracking-wider w-32">Costo ($)</th>
+                            <th className="px-3 py-2 text-left text-xs font-bold text-gray-600 uppercase tracking-wider w-32">Venta ($)</th>
+
+                            {/* Dynamic Branch Columns */}
+                            {branches.map(b => (
+                                <th key={b.sucursal_id} className="px-2 py-2 text-center text-xs font-bold text-blue-800 bg-blue-50 border-l border-blue-200 w-24">
+                                    <div className="flex flex-col gap-1 items-center">
+                                        <div className="truncate max-w-[100px]" title={b.nombre}>{b.nombre}</div>
+                                        <input
+                                            type="number"
+                                            placeholder="Todos"
+                                            className="w-16 h-6 text-xs text-center border border-blue-300 rounded focus:ring-1 focus:ring-blue-500"
+                                            value={stockDefaults[b.sucursal_id!] || ''}
+                                            onChange={(e) => handleApplyStockDefault(b.sucursal_id!, e.target.value)}
+                                        />
+                                    </div>
+                                </th>
+                            ))}
                         </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
                         {parsedProducts.map((product) => (
                             <tr key={product.id} className="hover:bg-gray-50">
-                                <td className="px-3 py-2 text-sm text-gray-900 font-medium">
-                                    {product.nombre}
+                                <td className="px-3 py-2 text-sm text-gray-900">
+                                    <div className="font-semibold">{product.nombre}</div>
+                                    <div className="text-xs text-gray-500">Cod: {product.descripcion}</div>
                                 </td>
                                 <td className="px-3 py-2">
-                                    <input
-                                        type="number"
-                                        className="w-24 border rounded p-1 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                    <input type="number" className="w-full border rounded p-1 text-sm text-right"
                                         value={product.precio_costo}
-                                        onChange={(e) => handleRowChange(product.id, 'precio_costo', Number(e.target.value))}
-                                    />
+                                        onChange={(e) => handleRowChange(product.id, 'precio_costo', Number(e.target.value))} />
                                 </td>
                                 <td className="px-3 py-2">
-                                    <input
-                                        type="number"
-                                        className="w-24 border rounded p-1 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-bold text-gray-800"
+                                    <input type="number" className="w-full border rounded p-1 text-sm text-right font-bold text-gray-700"
                                         value={product.precio_venta}
-                                        onChange={(e) => handleRowChange(product.id, 'precio_venta', Number(e.target.value))}
-                                    />
+                                        onChange={(e) => handleRowChange(product.id, 'precio_venta', Number(e.target.value))} />
                                 </td>
-                                <td className="px-3 py-2 text-xs text-gray-500 truncate max-w-xs">
-                                    {product.originalData.slice(0, 3).join(' | ')}...
-                                </td>
+
+                                {/* Stock Cells */}
+                                {branches.map(b => {
+                                    // Find stock for this branch
+                                    const stockVal = product.stock_distribution.find(s => s.sucursal_id === b.sucursal_id)?.cantidad || 0;
+                                    return (
+                                        <td key={b.sucursal_id} className="px-2 py-2 border-l border-gray-100 text-center">
+                                            <input
+                                                type="number"
+                                                className={`w-16 h-8 border rounded text-center text-sm focus:ring-1 focus:ring-blue-500 ${stockVal > 0 ? 'bg-green-50 font-bold text-green-700 border-green-200' : 'text-gray-400'}`}
+                                                value={stockVal}
+                                                onChange={(e) => handleStockChange(product.id, b.sucursal_id!, e.target.value)}
+                                            />
+                                        </td>
+                                    );
+                                })}
                             </tr>
                         ))}
                     </tbody>
@@ -372,9 +397,11 @@ export const BulkProductImporter: React.FC<BulkProductImporterProps> = ({ onClos
     );
 
     return (
-        <div className="bg-white rounded-lg p-6 max-h-[85vh] overflow-y-auto">
+        <div className="bg-white rounded-lg p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold text-gray-800">Importación Masiva</h1>
+                <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                    <Store className="text-purple-600" /> Importación Masiva & Stock
+                </h1>
                 {onClose && (
                     <button onClick={onClose} className="text-gray-500 hover:text-red-500 transition-colors">
                         <X size={24} />

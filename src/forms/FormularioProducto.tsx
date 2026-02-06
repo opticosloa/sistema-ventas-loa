@@ -150,7 +150,8 @@ export const FormularioProducto: React.FC = () => {
         setValue('precio_usd', val, { shouldValidate: true });
 
         if (val !== undefined && !isNaN(val) && dolarRate > 0) {
-            setValue('precio_venta_ars', parseFloat((val * dolarRate).toFixed(2)), { shouldValidate: true });
+            // ARS Rounded UP to integer
+            setValue('precio_venta_ars', Math.ceil(val * dolarRate), { shouldValidate: true });
         }
     };
 
@@ -164,10 +165,14 @@ export const FormularioProducto: React.FC = () => {
     };
 
     const handleArsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = e.target.value === '' ? undefined : parseFloat(e.target.value);
+        // Enforce Integer on Input
+        const rawVal = e.target.value === '' ? undefined : parseFloat(e.target.value);
+        const val = rawVal !== undefined ? Math.ceil(rawVal) : undefined;
+
         setValue('precio_venta_ars', val, { shouldValidate: true });
 
         if (val !== undefined && !isNaN(val) && dolarRate > 0) {
+            // USD keeps decimals
             setValue('precio_usd', parseFloat((val / dolarRate).toFixed(2)), { shouldValidate: true });
         }
     };
@@ -681,8 +686,16 @@ export const FormularioProducto: React.FC = () => {
                         <label className="text-sm text-blanco">Precio Costo <span className="text-red-500">*</span></label>
                         <input
                             type="number"
-                            step="0.01"
-                            {...register('precio_costo', { valueAsNumber: true })}
+                            step="1" // Integers only visual hint
+                            {...register('precio_costo', {
+                                valueAsNumber: true,
+                                onChange: (e) => {
+                                    const val = e.target.value === '' ? undefined : parseFloat(e.target.value);
+                                    if (val !== undefined) {
+                                        setValue('precio_costo', Math.ceil(val), { shouldValidate: true });
+                                    }
+                                }
+                            })}
                             className="input w-full bg-slate-50 text-slate-900"
                         />
                     </div>

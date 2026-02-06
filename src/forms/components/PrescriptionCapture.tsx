@@ -88,7 +88,8 @@ export const PrescriptionCapture: React.FC<PrescriptionCaptureProps> = ({ file, 
                         <button
                             type="button"
                             onClick={handleTrigger}
-                            disabled={compressing}
+                            disabled={true}
+                            // disabled={compressing}
                             className={`
                                 w-full sm:w-auto flex items-center justify-center gap-2 
                                 px-6 py-3 rounded-lg font-bold text-white shadow-lg transition-transform active:scale-95
@@ -106,7 +107,7 @@ export const PrescriptionCapture: React.FC<PrescriptionCaptureProps> = ({ file, 
                             ) : (
                                 <>
                                     <Camera size={20} />
-                                    Tomar Foto
+                                    Tomar Foto (en desarrollo)
                                 </>
                             )}
                         </button>
