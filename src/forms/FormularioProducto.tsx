@@ -1,13 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuthStore } from '../hooks';
 import Swal from 'sweetalert2';
-import { Search, X, Plus, Store } from 'lucide-react';
+import { Search, X, Plus, Store, Scan } from 'lucide-react';
 import { useForm, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import LOAApi from '../api/LOAApi';
 import type { Brand } from '../types/Marcas';
 import { BrandCreateModal } from './components/modals/BrandCreateModal';
+import { QRScanner } from './components/QRScanner';
 import { BulkProductImporter } from '../ventas/components/BulkProductImporter/BulkProductImporter';
 import { useBranch } from '../context/BranchContext';
 
@@ -56,7 +57,8 @@ const initialValues: ProductFormData = {
     precio_venta_ars: undefined,
     stock_minimo: 0,
     ubicacion: '',
-    is_active: true
+    is_active: true,
+    iva: 21
 };
 
 export const FormularioProducto: React.FC = () => {
@@ -92,10 +94,19 @@ export const FormularioProducto: React.FC = () => {
     const [stockDistribution, setStockDistribution] = useState<Record<string, number>>({});
     const [selectedBranches, setSelectedBranches] = useState<Record<string, boolean>>({});
 
+    // Product ABM State
+    const [editMode, setEditMode] = useState(false);
+    const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+    const [productSearchTerm, setProductSearchTerm] = useState('');
+    const [productResults, setProductResults] = useState<any[]>([]);
+    const [showProductResults, setShowProductResults] = useState(false);
+    const [isScannerOpen, setIsScannerOpen] = useState(false);
 
     // Refs
     const searchTimeout = useRef<any>(null);
+    const productSearchTimeout = useRef<any>(null);
     const wrapperRef = useRef<HTMLDivElement>(null);
+    const productSearchWrapperRef = useRef<HTMLDivElement>(null);
     const isSubmittingRef = useRef(false);
 
     // --- Effects ---
@@ -118,11 +129,14 @@ export const FormularioProducto: React.FC = () => {
         }
     }, [branches.length, refreshBranches]); // Removed branches.length to avoid infinite loop if simple check, but refreshBranches should be stable.
 
-    // 2. Close brand dropdown on click outside
+    // 2. Close brand and product dropdowns on click outside
     useEffect(() => {
         function handleClickOutside(event: MouseEvent) {
             if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
                 setShowBrandResults(false);
+            }
+            if (productSearchWrapperRef.current && !productSearchWrapperRef.current.contains(event.target as Node)) {
+                setShowProductResults(false);
             }
         }
         document.addEventListener("mousedown", handleClickOutside);
@@ -214,12 +228,158 @@ export const FormularioProducto: React.FC = () => {
             ...prev,
             [branchId]: qty
         }));
+
+        setSelectedBranches(prev => ({
+            ...prev,
+            [branchId]: true
+        }));
+    };
+
+    // --- Product Search & Selection Handling ---
+
+    const handleProductSearch = (term: string) => {
+        setProductSearchTerm(term);
+        if (productSearchTimeout.current) clearTimeout(productSearchTimeout.current);
+
+        if (term.length < 2) {
+            setProductResults([]);
+            setShowProductResults(false);
+            if (term.length === 0) {
+                resetFormMode(); // Reset if cleared
+            }
+            return;
+        }
+
+        setShowProductResults(true);
+        productSearchTimeout.current = setTimeout(async () => {
+            try {
+                // Using api/products/search/:search
+                const { data } = await LOAApi.get(`/api/products/search/${term}`);
+                console.log(data);
+                setProductResults(data.result || []);
+            } catch (err) {
+                console.error("Error searching products", err);
+                setProductResults([]);
+            }
+        }, 300);
+    };
+
+    const resetFormMode = () => {
+        reset(initialValues);
+        setEditMode(false);
+        setSelectedProductId(null);
+        setProductSearchTerm('');
+        setStockDistribution({});
+        setSelectedBranches({});
+        clearBrandSelection();
+        setProductResults([]);
+        setShowProductResults(false);
+    };
+
+    const selectProduct = async (product: any) => {
+        setEditMode(true);
+        setSelectedProductId(product.producto_id);
+        setProductSearchTerm(product.nombre);
+        setShowProductResults(false);
+
+        // Populate Form
+        setValue('nombre', product.nombre);
+        setValue('descripcion', product.descripcion || '');
+        setValue('tipo', product.tipo);
+        setValue('marca_id', product.marca_id || '');
+        setBrandSearchTerm(product.marca || '');
+        setValue('precio_costo', product.precio_costo);
+        setValue('precio_usd', product.precio_usd);
+        setValue('precio_venta_ars', product.precio_venta); // Assuming price_venta is ARS in DB
+        setValue('stock_minimo', product.stock_minimo);
+        setValue('ubicacion', product.ubicacion || '');
+        setValue('is_active', product.is_active || true);
+        setValue('iva', product.iva || 21);
+
+        // Handle Brand Visuals if brand is present
+        // We'd need the brand name. The search result usually sends raw data. 
+        // If the search result has 'marca', use it. Else we might need to fetch or leave it blank (it will be valid via marca_id).
+        // Assuming search/getById returns `marca` name if available or we can fetch it.
+        // For now, if generic search returns just IDs, visual lookup might be missing unless we fetch details.
+        // Let's assume we do a fresh fetchById to be safe or rely on what we have.
+        // Ideally, fetch FULL details including stock now.
+
+        try {
+            // Fetch Stock Distribution
+            const stockRes = await LOAApi.get(`/api/products/${product.producto_id}/stock-details`);
+            const stockData = stockRes.data.result || [];
+
+            const newDist: Record<string, number> = {};
+            const newSelected: Record<string, boolean> = {};
+
+            stockData.forEach((item: any) => {
+                const qty = Number(item.cantidad);
+                if (qty > 0) {
+                    newDist[item.sucursal_id] = qty;
+                    newSelected[item.sucursal_id] = true;
+                }
+            });
+
+            // Also enable current branch if not in list? No, just show what has stock.
+            // If user wants to add stock to a new branch, they check the box.
+
+            // Just pre-fill with DB data. 
+            // Note: If a branch has 0 stock, we might not get it back or it might be 0.
+            // We'll trust the stored procedure.
+
+            setStockDistribution(newDist);
+            setSelectedBranches(newSelected); // Or maybe Select ALL branches so user sees 0s? 
+            // Better: Select branches capable of having stock (all). 
+            // But let's stick to "Show what has stock" + "User can add others".
+            // To make it easier, let's auto-select all branches so they can see "0" vs "undefined"?
+            // User requirement: "Mostrar en el input de cada sucursal la cantidad de stock actual".
+            // So we should probably default to 0 for all branches if not present.
+
+            const allBranchesSelected: Record<string, boolean> = {};
+            branches.forEach(b => {
+                allBranchesSelected[b.sucursal_id!] = true;
+                if (newDist[b.sucursal_id!] === undefined) newDist[b.sucursal_id!] = 0;
+            });
+            setSelectedBranches(allBranchesSelected);
+            setStockDistribution(newDist);
+
+        } catch (e) {
+            console.error("Error fetching stock params", e);
+        }
+    };
+
+    const handleScanSuccess = async (decodedText: string) => {
+        setIsScannerOpen(false);
+        // Assume decodedText is product ID or Barcode.
+        // Try to fetch product by ID first, or search by query.
+        try {
+            // First try getById (in case QR is ID)
+            const { data } = await LOAApi.get(`/api/products/${decodedText}`);
+            if (data.success && data.result) {
+                selectProduct(data.result);
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Producto Encontrado',
+                    toast: true,
+                    position: 'top-end',
+                    showConfirmButton: false,
+                    timer: 1500
+                });
+                return;
+            }
+        } catch (e) {
+            // If ID fail, try search string
+            console.log("Not an ID, trying search...");
+        }
+
+        // Fallback search
+        handleProductSearch(decodedText);
+        setProductSearchTerm(decodedText);
     };
 
     const onSubmit: SubmitHandler<ProductFormData> = async (data) => {
         if (isSubmittingRef.current) return;
 
-        // 2. ACTIVAR BLOQUEO
         isSubmittingRef.current = true;
         setLoading(true);
         try {
@@ -243,6 +403,18 @@ export const FormularioProducto: React.FC = () => {
                 return;
             }
 
+            // Prepare Stock Payload (Current values in inputs)
+
+            // Requirement says "enviar el array de stocks con los valores absolutos". 
+            // Safest is to iterate over selected or just all active branches.
+            // Let's filter by selected check or just send all non-null.
+            const distributionData = Object.entries(selectedBranches)
+                .filter(([_, isSelected]) => isSelected)
+                .map(([branchId, _]) => ({
+                    sucursal_id: branchId,
+                    cantidad: stockDistribution[branchId] || 0
+                }));
+
             const payload = {
                 nombre: data.nombre,
                 descripcion: data.descripcion,
@@ -253,14 +425,20 @@ export const FormularioProducto: React.FC = () => {
                 stock_minimo: data.stock_minimo || 0,
                 ubicacion: data.ubicacion,
                 is_active: data.is_active,
-                // Legacy stock field might be required by backend validation if not updated yet? 
-                // We send 0 or total? Sending 0 safe if we distribute separately.
-                stock: 0
+                stock: 0, // Legacy
+                // Include stock_por_sucursal for direct update if editing
+                stock_por_sucursal: editMode ? distributionData : undefined
             };
 
-            const response = await LOAApi.post<any>('/api/products', payload);
+            let response;
+            if (editMode && selectedProductId) {
+                // UPDATE
+                response = await LOAApi.put(`/api/products/${selectedProductId}`, payload);
+            } else {
+                // CREATE
+                response = await LOAApi.post<any>('/api/products', payload);
+            }
 
-            // 2. VERIFICACIÓN DE CONFLICTO (DUPLICADO)
             if (response.data.conflict) {
                 Swal.fire({
                     title: "Producto Duplicado",
@@ -268,41 +446,31 @@ export const FormularioProducto: React.FC = () => {
                     icon: "warning"
                 });
                 setLoading(false);
-                return; // Detenemos la ejecución aquí
-            }
-            // 3. EXTRACCIÓN DEL ID (Ahora es seguro)
-            if (!response.data.result || !response.data.result.producto_id) {
-                throw new Error("Respuesta del servidor inválida");
-            }
-            const newProductId = response.data.result.producto_id;
-
-            // 2. Distribute Stock
-            const distributionData = Object.entries(selectedBranches)
-                .filter(([_, isSelected]) => isSelected)
-                .map(([branchId, _]) => ({
-                    sucursal_id: branchId,
-                    cantidad: stockDistribution[branchId] || 0
-                }))
-                .filter(item => item.cantidad > 0);
-
-            if (distributionData.length > 0) {
-                await LOAApi.post(`/api/products/${newProductId}/stock-distribution`, {
-                    stock_data: distributionData
-                });
+                return;
             }
 
-            Swal.fire("Éxito", 'Producto creado y stock distribuido correctamente', "success");
+            // For Create: Handle Stock Separately (Existing Logic)
+            if (!editMode) {
+                if (!response.data.result || !response.data.result.producto_id) {
+                    throw new Error("Respuesta del servidor inválida");
+                }
+                const newProductId = response.data.result.producto_id;
+
+                if (distributionData.length > 0) {
+                    await LOAApi.post(`/api/products/${newProductId}/stock-distribution`, {
+                        stock_data: distributionData
+                    });
+                }
+            }
+
+            Swal.fire("Éxito", editMode ? 'Producto actualizado correctamente' : 'Producto creado y stock distribuido correctamente', "success");
 
             // Reset
-            reset(initialValues);
-            clearBrandSelection();
-            setBrandSearchTerm('');
-            setStockDistribution({});
-            setSelectedBranches({});
+            resetFormMode();
 
         } catch (error) {
             console.error(error);
-            Swal.fire("Error", 'Error al crear producto', "error");
+            Swal.fire("Error", 'Error al guardar producto', "error");
         } finally {
             setLoading(false);
             isSubmittingRef.current = false;
@@ -312,18 +480,81 @@ export const FormularioProducto: React.FC = () => {
     return (
         <div className="w-full max-w-5xl mx-auto p-4 fade-in">
             <section className="bg-opacity-10 border border-blanco rounded-xl p-4">
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-blanco text-2xl font-semibold">
-                        Alta de Producto
-                    </h2>
-                    {role === 'SUPERADMIN' && (
-                        <button
-                            onClick={() => setIsImportModalOpen(true)}
-                            className="px-4 py-1.5 rounded-md text-sm font-medium bg-green-600 text-white hover:bg-green-700 shadow flex items-center gap-2"
-                        >
-                            <span>Importar (Excel)</span>
-                        </button>
-                    )}
+                <div className="flex flex-col gap-4 mb-4">
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-blanco text-2xl font-semibold">
+                            {editMode ? 'Editar Producto / Stock' : 'Alta de Producto'}
+                        </h2>
+                        {role === 'SUPERADMIN' && !editMode && (
+                            <button
+                                onClick={() => setIsImportModalOpen(true)}
+                                className="px-4 py-1.5 rounded-md text-sm font-medium bg-green-600 text-white hover:bg-green-700 shadow flex items-center gap-2"
+                            >
+                                <span>Importar (Excel)</span>
+                            </button>
+                        )}
+                    </div>
+
+                    {/* BUSCADOR INTEGRADO */}
+                    <div className="relative w-full" ref={productSearchWrapperRef}>
+                        <div className="flex gap-2">
+                            <div className="relative flex-1">
+                                <Search className="absolute left-3 top-2.5 text-gray-400" size={20} />
+                                <input
+                                    className="w-full bg-slate-900 text-white rounded-lg py-2.5 pl-10 pr-10 border border-slate-700 focus:ring-2 focus:ring-cyan-500 outline-none placeholder:text-gray-500"
+                                    placeholder="Buscar producto por nombre para editar o ajustar stock..."
+                                    value={productSearchTerm}
+                                    onChange={(e) => handleProductSearch(e.target.value)}
+                                // Disable typing if in edit mode? Maybe allow to search again to switch?
+                                // User said: "Si se limpia el buscador: Resetear el formulario para permitir crear uno nuevo."
+                                // So we allow typing always.
+                                />
+                                {productSearchTerm && (
+                                    <button
+                                        onClick={resetFormMode}
+                                        className="absolute right-3 top-2.5 text-gray-400 hover:text-white"
+                                    >
+                                        <X size={20} />
+                                    </button>
+                                )}
+                            </div>
+                            <button
+                                onClick={() => setIsScannerOpen(true)}
+                                className="bg-slate-800 hover:bg-slate-700 text-white p-2.5 rounded-lg border border-slate-700"
+                                title="Escanear QR"
+                                type="button"
+                            >
+                                <Scan size={24} />
+                            </button>
+                        </div>
+
+                        {/* Result Dropdown */}
+                        {showProductResults && (
+                            <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-xl border border-gray-200 max-h-60 overflow-y-auto z-50">
+                                {productResults.map((prod) => (
+                                    <button
+                                        key={prod.producto_id}
+                                        type="button"
+                                        onClick={() => selectProduct(prod)}
+                                        className="w-full text-left px-4 py-3 hover:bg-cyan-50 border-b border-gray-100 last:border-0 text-slate-800 flex justify-between items-center"
+                                    >
+                                        <div>
+                                            <span className="font-semibold block">{prod.nombre}</span>
+                                            <span className="text-xs text-gray-500">{prod.marca || 'Sin marca'} | {prod.tipo}</span>
+                                        </div>
+                                        <span className="text-sm font-bold text-cyan-700">
+                                            ${prod.precio_usd || prod.precio_venta || 0}
+                                        </span>
+                                    </button>
+                                ))}
+                                {productResults.length === 0 && (
+                                    <div className="p-4 text-center text-gray-500">
+                                        No se encontraron productos
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 <form
@@ -491,10 +722,10 @@ export const FormularioProducto: React.FC = () => {
                     </div>
 
                     {/* Stock Multi-Branch Section */}
-                    <div className="md:col-span-2 bg-slate-800/50 p-4 rounded-lg border border-slate-700 mt-2">
-                        <label className="text-sm text-white font-semibold flex items-center gap-2 mb-3">
-                            <Store size={18} className="text-cyan-400" />
-                            Distribuir Stock Inicial
+                    <div className={`md:col-span-2 p-4 rounded-lg border mt-2 ${editMode ? 'bg-cyan-900/10 border-cyan-500/30' : 'bg-slate-800/50 border-slate-700'}`}>
+                        <label className={`text-sm font-semibold flex items-center gap-2 mb-3 ${editMode ? 'text-cyan-400' : 'text-white'}`}>
+                            <Store size={18} className={editMode ? "text-cyan-400" : "text-cyan-400"} />
+                            {editMode ? 'Gestión de Stock (Edición Directa)' : 'Distribuir Stock Inicial'}
                         </label>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             {branches.map(branch => {
@@ -525,7 +756,11 @@ export const FormularioProducto: React.FC = () => {
                                 );
                             })}
                         </div>
-                        <p className="text-xs text-slate-400 mt-2">Seleccione las sucursales donde desea inicializar stock.</p>
+                        <p className="text-xs text-slate-400 mt-2">
+                            {editMode
+                                ? "Modifique los valores para actualizar el stock real de cada sucursal."
+                                : "Seleccione las sucursales donde desea inicializar stock."}
+                        </p>
                     </div>
 
                     <div>
@@ -569,7 +804,7 @@ export const FormularioProducto: React.FC = () => {
                             disabled={loading}
                             className="btn-primary"
                         >
-                            {loading ? 'Guardando...' : 'Crear Producto'}
+                            {loading ? 'Guardando...' : (editMode ? 'Guardar Cambios' : 'Crear Producto')}
                         </button>
                     </div>
                 </form>
@@ -580,6 +815,14 @@ export const FormularioProducto: React.FC = () => {
                     onSuccess={handleBrandCreateSuccess}
                     initialName={brandSearchTerm}
                 />
+
+                {/* Scanner Modal */}
+                {isScannerOpen && (
+                    <QRScanner
+                        onScanSuccess={handleScanSuccess}
+                        onClose={() => setIsScannerOpen(false)}
+                    />
+                )}
 
                 {/* Import Modal */}
                 {isImportModalOpen && (
