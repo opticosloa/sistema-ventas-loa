@@ -14,7 +14,6 @@ import { ClientForm } from "./components/ClientForm";
 import { DoctorForm } from "./components/DoctorForm";
 import { OpticSection } from "./components/OpticSection";
 import { MultifocalForm } from "./components/MultifocalForm";
-import { FrameSection } from "./components/FrameSection";
 import { SalesItemsList, type CartItem } from "./components/SalesItemsList";
 import { SupervisorAuthModal } from "../components/modals/SupervisorAuthModal";
 import { PrescriptionCapture } from "./components/PrescriptionCapture";
@@ -147,16 +146,23 @@ export const FormularioVenta: React.FC = () => {
     armazon: { id: string | null, price: number },
     lejos_OD: { id: string | null, price: number },
     lejos_OI: { id: string | null, price: number },
+    lejos_armazon: { id: string | null, price: number }, // New
     cerca_OD: { id: string | null, price: number },
     cerca_OI: { id: string | null, price: number },
-    multifocal: { id: string | null, price: number }, // Added Multifocal field
+    cerca_armazon: { id: string | null, price: number }, // New
+    multifocal: { id: string | null, price: number },
+    multifocal_armazon: { id: string | null, price: number }, // New
+    // armazon: { id: string | null, price: number }, // Deprecated unified
   }>({
     armazon: { id: null, price: 0 },
     lejos_OD: { id: null, price: 0 },
     lejos_OI: { id: null, price: 0 },
+    lejos_armazon: { id: null, price: 0 },
     cerca_OD: { id: null, price: 0 },
     cerca_OI: { id: null, price: 0 },
+    cerca_armazon: { id: null, price: 0 },
     multifocal: { id: null, price: 0 },
+    multifocal_armazon: { id: null, price: 0 },
   });
 
   // --- AUTO-SAVE LOGIC ---
@@ -556,7 +562,11 @@ export const FormularioVenta: React.FC = () => {
     dnp: valOrNull(formState.lejos_DNP),
     tipo: valOrNull(formState.lejos_Tipo),
     color: valOrNull(formState.lejos_Color),
-    armazon: valOrNull(formState.armazon),
+    armazon: opticItems.lejos_armazon.id ? {
+      id: opticItems.lejos_armazon.id,
+      nombre: formState.lejos_armazon,
+      precio: opticItems.lejos_armazon.price
+    } : null,
   };
 
   const cerca = {
@@ -573,7 +583,11 @@ export const FormularioVenta: React.FC = () => {
     dnp: valOrNull(formState.cerca_DNP),
     tipo: valOrNull(formState.cerca_Tipo),
     color: valOrNull(formState.cerca_Color),
-    armazon: valOrNull(formState.armazon),
+    armazon: opticItems.cerca_armazon.id ? {
+      id: opticItems.cerca_armazon.id,
+      nombre: formState.cerca_armazon,
+      precio: opticItems.cerca_armazon.price
+    } : null,
   };
 
   const multifocal = {
@@ -581,6 +595,11 @@ export const FormularioVenta: React.FC = () => {
     di_lejos: valOrNull(DI_Lejos),
     di_cerca: valOrNull(DI_Cerca),
     altura: valOrNull(Altura),
+    armazon: opticItems.multifocal_armazon.id ? {
+      id: opticItems.multifocal_armazon.id,
+      nombre: formState.multifocal_armazon,
+      precio: opticItems.multifocal_armazon.price
+    } : null,
   };
 
   // Combine Retail Cart + Optical Items for Display
@@ -623,9 +642,15 @@ export const FormularioVenta: React.FC = () => {
       addOptic(opticItems.multifocal, `Multifocal: ${formState.multifocalTipo}`);
     }
 
-    // Add Frame
-    if (opticItems.armazon.id && opticItems.armazon.price > 0) {
-      addOptic(opticItems.armazon, "Armazón de Receta");
+    // Add Frames (Specific)
+    if (opticItems.lejos_armazon.id && opticItems.lejos_armazon.price > 0) {
+      addOptic(opticItems.lejos_armazon, `Armazón Lejos: ${formState.lejos_armazon}`);
+    }
+    if (opticItems.cerca_armazon.id && opticItems.cerca_armazon.price > 0) {
+      addOptic(opticItems.cerca_armazon, `Armazón Cerca: ${formState.cerca_armazon}`);
+    }
+    if (opticItems.multifocal_armazon.id && opticItems.multifocal_armazon.price > 0) {
+      addOptic(opticItems.multifocal_armazon, `Armazón Multifocal: ${formState.multifocal_armazon}`);
     }
 
     return [...cart, ...opticalList];
@@ -1259,6 +1284,13 @@ export const FormularioVenta: React.FC = () => {
             stockStatus={stockStatus.lejos}
             materials={materials}
             treatments={treatments}
+            dolarRate={dolarRate}
+            onPriceChange={(precio: number, id: string | null) => {
+              setOpticItems(prev => ({
+                ...prev,
+                lejos_armazon: { id: id, price: precio }
+              }));
+            }}
           />
 
           <OpticSection
@@ -1270,21 +1302,13 @@ export const FormularioVenta: React.FC = () => {
             stockStatus={stockStatus.cerca}
             materials={materials}
             treatments={treatments}
-          />
-
-          <FrameSection
-            formState={formState as FormValues}
-            onInputChange={handleInputChangeWrapped}
+            dolarRate={dolarRate}
             onPriceChange={(precio: number, id: string | null) => {
-              // setArmazonPrecio(precio); // REMOVED: Using centralized state
-              // setSelectedArmazonId(id || null); // REMOVED: Using centralized state
               setOpticItems(prev => ({
                 ...prev,
-                armazon: { id: id, price: precio }
+                cerca_armazon: { id: id, price: precio }
               }));
-              if (lastRecipeDate) setLastRecipeDate(null);
             }}
-            dolarRate={dolarRate}
           />
 
           <MultifocalForm
@@ -1300,6 +1324,12 @@ export const FormularioVenta: React.FC = () => {
               setFieldValue('multifocalTipo', `${item.marca} ${item.modelo} ${item.material} ${item.tratamiento || ''}`.trim());
             }}
             dolarRate={dolarRate}
+            onFramePriceChange={(precio: number, id: string | null) => {
+              setOpticItems(prev => ({
+                ...prev,
+                multifocal_armazon: { id: id, price: precio }
+              }));
+            }}
           />
 
 
@@ -1308,7 +1338,12 @@ export const FormularioVenta: React.FC = () => {
             <label className="text-white font-bold">Total Cristales (Auto-calculado) ($):</label>
             <div className="text-right text-lg font-bold text-celeste">
               {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(
-                opticItems.lejos_OD.price + opticItems.lejos_OI.price + opticItems.cerca_OD.price + opticItems.cerca_OI.price + opticItems.multifocal.price
+                opticItems.lejos_OD.price + opticItems.lejos_OI.price +
+                opticItems.cerca_OD.price + opticItems.cerca_OI.price +
+                opticItems.multifocal.price +
+                (opticItems.lejos_armazon.price || 0) +
+                (opticItems.cerca_armazon.price || 0) +
+                (opticItems.multifocal_armazon.price || 0)
               )}
             </div>
           </div>

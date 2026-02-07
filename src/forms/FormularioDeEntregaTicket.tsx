@@ -77,10 +77,20 @@ export const FormularioDeEntregaTicket: React.FC = () => {
                             eje: eye.eje ?? "0"
                         };
                     };
+
+                    // Helper para extraer nombre de armazón (soporta string legado u objeto nuevo)
+                    const getArmazonName = (val: any) => {
+                        if (!val) return null;
+                        return typeof val === 'object' ? val.nombre : val;
+                    };
+
                     // --- CONSTRUCCIÓN DEL OBJETO RECETA ---
                     ticketData.receta = {
-                        // Buscamos datos generales (Armazón, Color, Tipo) preferentemente en 'lejos'
-                        armazon: prescriptionData.lejos?.armazon || prescriptionData.cerca?.armazon || "No especificado",
+                        // Buscamos datos generales (Armazón, Color, Tipo) preferentemente en 'lejos', luego 'cerca', luego 'multifocal'
+                        armazon: getArmazonName(prescriptionData.lejos?.armazon) ||
+                            getArmazonName(prescriptionData.cerca?.armazon) ||
+                            getArmazonName(prescriptionData.multifocal?.armazon) ||
+                            "No especificado",
                         color: prescriptionData.lejos?.color || "N/A",
                         tipo_cristal: prescriptionData.lejos?.tipo || "N/A",
                         obra_social: prescriptionData.obra_social || "N/A",
@@ -88,15 +98,18 @@ export const FormularioDeEntregaTicket: React.FC = () => {
                         // Mapeamos las secciones ópticas
                         lejos: {
                             OD: normalizeEye(prescriptionData.lejos?.OD),
-                            OI: normalizeEye(prescriptionData.lejos?.OI)
+                            OI: normalizeEye(prescriptionData.lejos?.OI),
+                            armazon: getArmazonName(prescriptionData.lejos?.armazon)
                         },
                         cerca: {
                             OD: normalizeEye(prescriptionData.cerca?.OD),
-                            OI: normalizeEye(prescriptionData.cerca?.OI)
+                            OI: normalizeEye(prescriptionData.cerca?.OI),
+                            armazon: getArmazonName(prescriptionData.cerca?.armazon)
                         },
                         multifocal: {
                             OD: normalizeEye(prescriptionData.multifocal?.OD),
-                            OI: normalizeEye(prescriptionData.multifocal?.OI)
+                            OI: normalizeEye(prescriptionData.multifocal?.OI),
+                            armazon: getArmazonName(prescriptionData.multifocal?.armazon)
                         }
                     };
                 } else {
@@ -589,12 +602,8 @@ export const FormularioDeEntregaTicket: React.FC = () => {
                                 {selectedTicket && selectedTicket.receta ? (
                                     <>
                                         <div className="mb-6">
-                                            <div className="text-xs text-gray-500 uppercase font-bold mb-1">Detalles del Armazón y Cristal</div>
-                                            <div className="grid grid-cols-3 gap-2">
-                                                <div className="p-3 bg-blue-50/50 border border-blue-100 rounded-lg text-blue-900">
-                                                    <span className="block text-[10px] uppercase opacity-60">Modelo</span>
-                                                    <span className="font-bold">👓 {selectedTicket.receta.armazon}</span>
-                                                </div>
+                                            <div className="text-xs text-gray-500 uppercase font-bold mb-1">Detalles del Cristal</div>
+                                            <div className="grid grid-cols-2 gap-2">
                                                 <div className="p-3 bg-gray-50/50 border border-gray-100 rounded-lg text-gray-700">
                                                     <span className="block text-[10px] uppercase opacity-60">Color</span>
                                                     <span className="font-medium">{selectedTicket.receta.color}</span>
@@ -633,6 +642,13 @@ export const FormularioDeEntregaTicket: React.FC = () => {
                                                                 </div>
                                                             ))}
                                                         </div>
+                                                        {/* Armazón en Sección Específica */}
+                                                        {r.armazon && (
+                                                            <div className="bg-blue-50 border-t border-blue-100 p-2 flex items-center justify-center gap-2">
+                                                                <span className="text-[10px] uppercase text-blue-600 font-bold">Armazón:</span>
+                                                                <span className="text-sm font-bold text-blue-900">{r.armazon}</span>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 )
                                             })}

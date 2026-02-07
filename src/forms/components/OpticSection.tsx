@@ -1,6 +1,7 @@
 import React from 'react';
 import type { FormValues } from '../../types/ventasFormTypes';
 import { useNumericInput } from '../../hooks/useNumericInput';
+import { FrameSection } from './FrameSection';
 
 interface OpticSectionProps {
     title: string;
@@ -11,6 +12,8 @@ interface OpticSectionProps {
     stockStatus: { OD: any; OI: any };
     materials?: any[];
     treatments?: any[];
+    dolarRate?: number;
+    onPriceChange?: (price: number, id: string | null) => void;
 }
 
 export const OpticSection: React.FC<OpticSectionProps> = ({
@@ -21,7 +24,9 @@ export const OpticSection: React.FC<OpticSectionProps> = ({
     onInputChange,
     stockStatus,
     materials = [],
-    treatments = []
+    treatments = [],
+    dolarRate = 0,
+    onPriceChange // Optional now
 }) => {
 
     const getVal = (field: string) => formState[`${prefix}_${field}` as keyof FormValues];
@@ -40,7 +45,7 @@ export const OpticSection: React.FC<OpticSectionProps> = ({
     };
 
     return (
-        <div className="backdrop-blur-sm p-5 rounded-xl border border-white mb-6">
+        <div className="relative focus-within:z-30 backdrop-blur-sm p-5 rounded-xl border border-white mb-6">
             <h3 className="text-3xl text-cyan-400 font-bold mb-4 flex justify-center items-center">
                 {title}
             </h3>
@@ -206,6 +211,21 @@ export const OpticSection: React.FC<OpticSectionProps> = ({
                         placeholder="Distancia interpupilar"
                     />
                 </div>
+            </div>
+
+            {/* SECTION: ARMAZON SELECTION (Integrated) */}
+            <div className="mt-6 pt-4 border-t border-white/20">
+                <h4 className="text-white/80 text-sm font-bold mb-3 uppercase tracking-wider">
+                    Selección de Armazón
+                </h4>
+                <FrameSection
+                    formState={formState}
+                    fieldName={`${prefix}_armazon`}
+                    // @ts-ignore
+                    onInputChange={onInputChange}
+                    dolarRate={dolarRate}
+                    onPriceChange={onPriceChange}
+                />
             </div>
         </div>
     );

@@ -35,6 +35,9 @@ export type FormValues = {
 
   // Unified frame field
   armazon: string;
+  lejos_armazon?: string;
+  cerca_armazon?: string;
+  multifocal_armazon?: string;
 
   // Cerca (OD / OI)
   cerca_OD_Esf: string;

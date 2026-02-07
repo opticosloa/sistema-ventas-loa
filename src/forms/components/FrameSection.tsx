@@ -6,6 +6,7 @@ import Swal from 'sweetalert2';
 
 interface FrameSectionProps {
     formState: FormValues;
+    fieldName: string; // New prop for dynamic field binding
     onInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onPriceChange?: (price: number, id: string | null) => void;
     dolarRate?: number;
@@ -13,15 +14,16 @@ interface FrameSectionProps {
 
 export const FrameSection: React.FC<FrameSectionProps> = ({
     formState,
+    fieldName,
     onInputChange,
     onPriceChange,
     dolarRate = 0
 }) => {
 
-    const handleProductChange = (fieldName: keyof FormValues, value: string) => {
+    const handleProductChange = (field: string, value: string) => {
         onInputChange({
             target: {
-                name: fieldName,
+                name: field,
                 value: value
             }
         } as React.ChangeEvent<HTMLInputElement>);
@@ -30,8 +32,11 @@ export const FrameSection: React.FC<FrameSectionProps> = ({
     const getPrice = (product: any) => {
         const usd = product.precio_usd ? Number(product.precio_usd) : 0;
         const ars = product.precio_venta ? Number(product.precio_venta) : 0;
-        if (usd > 0 && dolarRate > 0) return usd * dolarRate;
-        return ars;
+        let finalPrice = ars;
+        if (usd > 0 && dolarRate > 0) {
+            finalPrice = usd * dolarRate;
+        }
+        return Math.ceil(finalPrice); // Ensure Integer
     };
 
     const formatPrice = (product: any) => {
@@ -64,7 +69,7 @@ export const FrameSection: React.FC<FrameSectionProps> = ({
                     (decodedText) => {
                         // Success callback
                         console.log("QR Code detected:", decodedText);
-                        handleProductChange("armazon", decodedText); // Set the raw value to search
+                        handleProductChange(fieldName, decodedText); // Set the raw value to search
 
                         // Close scanner and modal
                         if (scanner) {
@@ -99,25 +104,27 @@ export const FrameSection: React.FC<FrameSectionProps> = ({
                 scanner.clear().catch(console.error);
             }
         };
-    }, [showScanner]);
+    }, [showScanner, fieldName]);
 
-    const renderFrameInput = (label: string, fieldName: keyof FormValues) => (
-        <div className="flex gap-2 items-end w-full">
+    const renderFrameInput = (label: string, field: string) => (
+        <div className="flex flex-row items-end gap-2 w-full">
             <div className="flex-grow">
                 <ProductTypeAutocomplete
                     label={label}
                     type="ARMAZON,ANTEOJO_SOL"
-                    value={formState[fieldName] as string}
+                    // @ts-ignore
+                    value={formState[field] as string}
                     formatPrice={formatPrice}
                     onChange={(val) => {
-                        handleProductChange(fieldName, val);
+                        handleProductChange(field, val);
                         if (val === "" && onPriceChange) {
                             onPriceChange(0, null);
                         }
                     }}
                     onProductSelect={(product) => {
                         const name = product.nombre || product.descripcion || "";
-                        handleProductChange(fieldName, name);
+                        // @ts-ignore
+                        handleProductChange(field, name);
 
                         // IMPORTANTE: Necesitamos pasar el ID y el precio al padre
                         if (onPriceChange) {
@@ -153,11 +160,8 @@ export const FrameSection: React.FC<FrameSectionProps> = ({
 
 
     return (
-        <section className="bg-opacity-10 border border-blanco rounded-xl p-4 mt-4">
-            <h3 className="text-blanco font-medium mb-3">Armazones</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {renderFrameInput(formState.armazon ? "Armazón *" : "Armazón", "armazon")}
-            </div>
+        <React.Fragment>
+            {renderFrameInput("Buscar Armazón", fieldName)}
             {showScanner && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
                     <div className="bg-white rounded-xl max-w-lg w-full p-6 relative">
@@ -175,6 +179,6 @@ export const FrameSection: React.FC<FrameSectionProps> = ({
                     </div>
                 </div>
             )}
-        </section>
+        </React.Fragment>
     );
 };

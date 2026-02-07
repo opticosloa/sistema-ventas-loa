@@ -3,19 +3,22 @@ import React, { useState, useEffect } from 'react';
 import { Search, X } from 'lucide-react';
 import type { FormValues } from '../../types/ventasFormTypes';
 import { searchMultifocales, type Multifocal } from '../../services/multifocales.api';
+import { FrameSection } from './FrameSection';
 
 interface MultifocalFormProps {
     formState: FormValues;
     onInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
     onSelect?: (item: Multifocal, price: number) => void;
     dolarRate: number;
+    onFramePriceChange?: (price: number, id: string | null) => void;
 }
 
 export const MultifocalForm: React.FC<MultifocalFormProps> = ({
     formState,
     onInputChange,
     onSelect,
-    dolarRate
+    dolarRate,
+    onFramePriceChange
 }) => {
     const { multifocalTipo, DI_Lejos, DI_Cerca, Altura, Observacion } = formState;
     const [loading, setLoading] = useState(false);
@@ -181,6 +184,19 @@ export const MultifocalForm: React.FC<MultifocalFormProps> = ({
                     className="w-full bg-slate-100/10 text-white rounded-lg p-2.5 border border-white/20 focus:ring-2 focus:ring-cyan-500 outline-none sm:col-span-3 h-20 resize-none mt-2"
                 />
             </div>
-        </section>
+            <div className="mt-6 pt-4 border-t border-white/20">
+                <h4 className="text-white/80 text-sm font-bold mb-3 uppercase tracking-wider">
+                    Selección de Armazón
+                </h4>
+                <FrameSection
+                    formState={formState}
+                    fieldName="multifocal_armazon"
+                    // @ts-ignore
+                    onInputChange={onInputChange}
+                    dolarRate={dolarRate}
+                    onPriceChange={onFramePriceChange}
+                />
+            </div>
+        </section >
     );
 };

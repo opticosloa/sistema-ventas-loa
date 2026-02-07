@@ -91,7 +91,7 @@ export const ProductTypeAutocomplete: React.FC<ProductTypeAutocompleteProps> = (
     };
 
     return (
-        <div className={`relative flex flex-col gap-1 ${className}`}>
+        <div className={`relative isolate focus-within:z-[100] flex flex-col gap-1 ${className}`}>
             <label className="text-gray-400 text-sm">{label}</label>
             <div className="relative">
                 <input
@@ -114,7 +114,7 @@ export const ProductTypeAutocomplete: React.FC<ProductTypeAutocompleteProps> = (
 
             {/* Suggestions Dropdown */}
             {showSuggestions && (value || filteredProducts.length > 0) && (
-                <ul className="absolute z-50 top-full left-0 right-0 bg-azul border border-blanco rounded-b-lg max-h-60 overflow-y-auto shadow-lg mt-1">
+                <ul className="absolute z-[1000] top-full left-0 right-0 bg-azul border border-blanco rounded-b-lg max-h-60 overflow-y-auto shadow-xl mt-1">
                     {filteredProducts.length > 0 ? (
                         filteredProducts.map((product, idx) => (
                             <li
